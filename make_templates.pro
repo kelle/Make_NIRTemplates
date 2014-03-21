@@ -13,10 +13,10 @@ if (n_elements(rng) ne 0) then begin
  endif
 endif
 
-;fact = total(flxn)
-norm_fact = int_tabulated(lamn,flxn)
+norm_fact = MEAN(flxn,/nan)
+;norm_fact = int_tabulated(lamn,flxn)
 
-if ~finite(norm_fact) then print, 'problem with normalization'
+if ~finite(norm_fact) then MESSAGE, 'problem with normalization'
 ;print, 'norm', fact
 
 return, flx/norm_fact
@@ -25,7 +25,7 @@ end
 ; -----------------------------
 ; SCRIPT TO CREATE TEMPLATES
 ; -----------------------------
-function kellel_template, lam, flxs, flx_uncs, norm_facts=norm_facts, flags_in=flags_in, flags_out=flags_out, flags_one=flags_one,sigma=sigma, sd=sd, chi2=chi2, maxs_templ=maxs_templ, mins_templ=mins_templ
+function kellel_template, lam, flxs, flx_uncs, norm_facts=norm_facts, flags_in=flags_in, flags_out=flags_out, flags_one=flags_one,sigma=sigma, sd=sd, chi2=chi2, maxs_templ=maxs_templ, mins_templ=mins_templ, no_renorm=no_renorm
 
 ;JUST MAKE THE TEMPLATE AND FIND OUTLIERS
 
@@ -47,6 +47,7 @@ if (cntselect eq 0) then message, 'No spectra available for creating template'
 ;print, 'wselect: ', cntselect
 
 ; first normalization of each spectrum
+
 for j=0,nspec-1 do begin
   flxns(*,j) = kellel_normalize(lam, flxs(*,j), norm_fact=norm_fact)
   flxn_uncs(*,j) = flx_uncs(*,j) / norm_fact
@@ -58,12 +59,14 @@ endfor
 mc_meancomb2, flxns[*,wselect], template_first, datavar=flxn_uncs[*,wselect]
 
 ; repeat normalization against template
-for j=0,nspec-1 do begin
-	norm_facts(j) = median( flxs[*,j] / template_first )
-	flxns[*,j] = flxs[*,j] / norm_facts[j]
-	;print,min(flxns[*,j]),max(flxns[*,j])
-endfor
-  	
+if ~keyword_set(no_renorm) then begin
+	for j=0,nspec-1 do begin
+		norm_facts(j) = median( flxs[*,j] / template_first );
+		flxns[*,j] = flxs[*,j] / norm_facts[j]
+		;print,min(flxns[*,j]),max(flxns[*,j])
+	endfor
+endif
+
 ;recalculate template using re-normalized spectra
 mc_meancomb2, flxns[*,wselect], template, datavar=flxn_uncs(*,wselect)
 
@@ -72,21 +75,24 @@ mins_templ = MIN(flxns[*,wselect],dim=2)
 maxs_templ = MAX(flxns[*,wselect],dim=2)
 
 ; standard deviation of spectra used in template at each wavelength
-; currently unweighted
+; unweighted
 sd = fltarr(nlam)
 for j = 0, nlam-1 do sd[j] = stddev(flxns[j,wselect])
 
 ; identify outliers of new template
 ; JUST FLAG (REJECT LATER) based on reduced chi square goodness of fit test
 chi2 = fltarr(nspec)
+i_NotNANs_template = where(finite(template) eq 1,n_template)
 for ispec=0,nspec-1 do begin
-  chi2[ispec] = total( (flxns[*,ispec]-template)^2/sd^2) / (n_elements(template)-1.)
+  chi2[ispec] = total( (flxns[*,ispec]-template)^2/sd^2, /NAN ) / (n_template-1.)
   if (chi2[ispec] gt sigma) then begin
 	  flags_one[ispec] = flags_one[ispec]+1
 	  flags_out[ispec] = flags_in[ispec]+1
 	  ;print,'rejected chi2: ', chi2[ispec]
   endif
 endfor
+
+
 
 ;flag = flag<1 ; sets all flags greater than 1 to 1 and leaves 0 unchanged.
 
@@ -160,7 +166,9 @@ spt = 'L'+strmid(strtrim(string(type),2),0,1)
 print, spt, '  chi^2: ',strn(sigma)
 print, 'ptype: ', strn(ptype)
 sfold = bfold+spt+'/'
+spec_fold = '/Users/kelle/Dropbox/Data/nir_spectra_low/'
 dfold = sfold+spt+'s/'
+slist = dfold+spt+'s_in.txt'
 ofold = sfold+'output_'+spt+'/'
 strfile = sfold+'spectra.dat'
 band = ['J','H','K']
@@ -173,11 +181,24 @@ if (file_search(ofold) eq '') then begin
 	spawn, 'mkdir '+ofold
 	print, 'created directory: ' + ofold
 endif
+
 if (file_search(strfile) eq '' or keyword_set(reset)) then begin
-	sfiles = file_search(dfold+'*.fits')
+	MESSAGE,'re-selecting spectra',/info
+	
+	;use .txt file if present, otherwise use all spectra in folder
+	if file_search(slist) eq '' then begin
+		sfiles = file_search(dfold+'*.fits')
+		spec_fold='' 
+		MESSAGE,'using spectra in ' + dfold, /info
+	endif else begin
+		READCOL,slist,sfiles,format='A'
+		sfiles=sfiles 
+		MESSAGE,'using spectra listed in ' + slist,/info
+	endelse
+	
 	snr = fltarr(n_elements(sfiles))
 	for ifile=0,n_elements(sfiles)-1 do begin
-	 fits = readfits(sfiles(ifile),hd,/silent)
+	 fits = READFITS(spec_fold+sfiles(ifile),hd,/silent)
 	 if (ifile eq 0) then begin
 		 ;setup the arrays
 	  lam = fits(*,0)
@@ -189,27 +210,29 @@ if (file_search(strfile) eq '' or keyword_set(reset)) then begin
 	 flx(*,ifile) = interpol(fits(*,1),fits(*,0),lam)
 	 ;mx = max(flx(wnorm,ifile))
 	 ;flx(*,ifile) = flx(*,ifile)/mx
-	 flx_unc(*,ifile) = interpol(fits(*,2),fits(*,0),lam)
+	 flx_unc(*,ifile) = interpol(fits[*,2],fits[*,0],lam)
 	 ;snr(ifile) = max(smooth(flx(*,ifile)/ns(*,ifile),9))
 	 ;plot, lam,flx(*,ifile)
 	endfor
 
 	str = create_struct($
-	'file',sfiles,$
+	'files',sfiles,$
 	'lam',lam,$
 	'flx',flx,$
 	'flx_unc',flx_unc,$
 	;'snr',snr, $ 
 	;'names',strrep(strrep(strrep(sfiles,dfold,''),'.fits',''),'spex_prism_',''))
 	'names', strrep(strrep(sfiles,dfold,''),'.fits',''))	
- 	 save, str, file=strfile
+ 	 
+	 save, str, file=strfile
 
-endif else restore, file=strfile
+endif else begin
+	restore, file=strfile
+	MESSAGE,'restoring from file',/info
+endelse
 
-nspec=n_elements(sfiles)
+nspec=n_elements(str.files)
 print,'nspec=',nspec
-
-
 
 fbase = 'comp_'+spt+'_s'+strmid(strtrim(string(sigma),2),0,3)
 
@@ -223,7 +246,7 @@ endelse
 
 ; iterative scan, normalizing in individual bands
 lam_norm = [[0.87,1.39],[1.41,1.89],[1.91,2.39]]
-nloops = 6
+nloops = 8
 
 flags_in = intarr(nspec)
 flags_j = intarr(nspec)
@@ -245,8 +268,10 @@ for iloop=0,nloops-1 do begin
 
 		w = where(str.lam ge lam_norm(0,mmm) and str.lam le lam_norm(1,mmm),cnt)
 		
+		if iloop ge nloops/2.  then no_renorm = 1 else no_renorm = 0
+		
 		;takes flags_in and modifies to reflect new rejects
-		template = kellel_template(str.lam(w), str.flx(w,*), str.flx_unc(w,*), norm_facts=norm_facts, flags_in=flags_in, flags_out=flags_out, flags_one=flags_one,sd=sd, sigma=sigma, chi2=chi2, mins_templ=mins_templ, maxs_templ=maxs_templ)
+		template = kellel_template(str.lam(w), str.flx(w,*), str.flx_unc(w,*), norm_facts=norm_facts, flags_in=flags_in, flags_out=flags_out, flags_one=flags_one,sd=sd, sigma=sigma, chi2=chi2, mins_templ=mins_templ, maxs_templ=maxs_templ,no_renorm=no_renorm)
 		
 		i_keep = where(flags_out eq 0,cnt_keep)
 		i_rejects = where(flags_out ge 1,cnt_reject)
@@ -271,6 +296,8 @@ for iloop=0,nloops-1 do begin
 		i_rejects_h = where(flags_h ge 1,cnt_reject_h)
 		i_rejects_k = where(flags_k ge 1,cnt_reject_k)
 	 
+	 	if mmm eq 2 then print,iloop,cnt_reject_j,cnt_reject_h,cnt_reject_k
+	 
 		if (cnt_keep eq 0) then message, 'Warning, rejected all sources!'
 		
 		;print, 'loop & mean chi^2 = ' + strn(iloop) + ' ' + strn(mean(chi2[i_keep]))
@@ -280,28 +307,29 @@ for iloop=0,nloops-1 do begin
 		;if mmm eq 2 then print, ' '
 			
 		; PLOT	chi^sq for each band	
-		if mmm eq 0 then begin
-			window, 0
-			!p.multi=[0,3,1]
-			!p.thick=2
-		endif else begin
-			wset, 0
-			!p.multi=[3-mmm,3,1]
-		endelse			
-		plot, i_spec, chi2, psym=3, title=strn(mmm)	, xr=[-1,nspec],xstyle=1,symsize=2,/ylog
-		if i_rejects[0] ne -1 then oplot, i_spec[i_rejects], chi2[i_rejects], psym=6, symsize=3.5,color=red
-		if i_rejects_j[0] ne -1 then oplot, i_spec[i_rejects_j], chi2[i_rejects_j], psym=5, symsize=3,color=cyan
-		if i_rejects_h[0] ne -1 then oplot, i_spec[i_rejects_h], chi2[i_rejects_h], psym=4, symsize=2,color=green
-		if i_rejects_k[0] ne -1 then oplot, i_spec[i_rejects_k], chi2[i_rejects_k], psym=1, symsize=2,color=magenta
+		if ~keyword_Set(ps) then begin
+			if mmm eq 0 then begin
+				window, 0
+				!p.multi=[0,3,1]
+				!p.thick=2
+			endif else begin
+				wset, 0
+				!p.multi=[3-mmm,3,1]
+			endelse			
+			plot, i_spec, chi2, psym=3, title=strn(mmm)	, xr=[-1,nspec],xstyle=1,symsize=2,/ylog
+			if i_rejects[0] ne -1 then oplot, i_spec[i_rejects], chi2[i_rejects], psym=6, symsize=3.5,color=red
+			if i_rejects_j[0] ne -1 then oplot, i_spec[i_rejects_j], chi2[i_rejects_j], psym=5, symsize=3,color=cyan
+			if i_rejects_h[0] ne -1 then oplot, i_spec[i_rejects_h], chi2[i_rejects_h], psym=4, symsize=2,color=green
+			if i_rejects_k[0] ne -1 then oplot, i_spec[i_rejects_k], chi2[i_rejects_k], psym=1, symsize=2,color=magenta
 		
-		plots, [0,nspec-1], [mean(chi2[i_keep]), mean(chi2[i_keep])]
-		plots, [0,nspec-1], [sigma,sigma], linestyle=1
-		xyouts, mmm/3.0, 0, 'mean chi^2 =' + strn(mean(chi2[i_keep])), /normal
+			plots, [0,nspec-1], [mean(chi2[i_keep]), mean(chi2[i_keep])]
+			plots, [0,nspec-1], [sigma,sigma], linestyle=1
+			xyouts, mmm/3.0, 0, 'mean chi^2 =' + strn(mean(chi2[i_keep])), /normal
+		ENDIF
 				
 		flags_in = flags_out
 		;flags = flag+f
 		chi2all(*,mmm) = chi2
-		 
 		 
 		 
 	; plot out results if at end of loop
@@ -312,19 +340,29 @@ for iloop=0,nloops-1 do begin
 			wnselect_h = where(flags_h ne 0,cntnselect_h)
 			wnselect_k = where(flags_k ne 0,cntnselect_k)
 		   	wselect = where(flags eq 0,cntselect) 
+			
+			i_wnselect_j = intarr(cntnselect_j)
+			i_wnselect_h = intarr(cntnselect_h)
+			i_wnselect_k = intarr(cntnselect_k)
+			for i=0,cntnselect_j-1 do i_wnselect_j[i] = where(wnselect eq wnselect_j[i])
+			for i=0,cntnselect_h-1 do i_wnselect_h[i] = where(wnselect eq wnselect_h[i])
+			for i=0,cntnselect_k-1 do i_wnselect_k[i] = where(wnselect eq wnselect_k[i])
+			
+		   
 		   
 		   ;SET UP THE PLOTS
-		   if mmm eq 0 then begin
-			   window,1
-			   !p.multi=[0,3,2]
-		   endif else begin
-			   wset,1
-			   !p.multi=[6-mmm,3,2]
-		   endelse
+			if mmm eq 0 then begin
+				   if ~keyword_set(ps) then window,1
+				   !p.multi=[0,3,2]
+			endif else begin
+				   if ~keyword_set(ps) then wset,1
+				   !p.multi=[6-mmm,3,2]
+			endelse
+	  	 	
 			flux_mins = fltarr(nspec) & flux_maxs=fltarr(nspec)
 	   		for i = 0,nspec-1 do flux_mins[i] = MIN( str.flx[w,i] / norm_facts[i] ) 
 	   		for i = 0,nspec-1 do flux_maxs[i] = MAX( str.flx[w,i] / norm_facts[i] )
-	      yra = [MIN(flux_mins),MAX(flux_maxs) ] 
+	    	yra = [MIN(flux_mins),MAX(flux_maxs) ] 
 
 		   ;plot template
 		   plot, str.lam(w), template, /xsty, yra=yra,/ysty, xtitle='!3Wavelength (!9m!3m)', ytitle='Normalized Flux', charsize=2, xmargin=[8,2], title=tit
@@ -332,7 +370,7 @@ for iloop=0,nloops-1 do begin
 		   color_kept=blue
 		   colorfill_sdev = gray
 		   colorfill_minmax = vltgray
-		    
+			
 		   case 1 of 
 		    	ptype eq 0: begin
 					;plot each object rejected from template
@@ -344,9 +382,9 @@ for iloop=0,nloops-1 do begin
 				   ;polyfill the standard dev
   		   		   polyfill, [str.lam(w),reverse(str.lam(w))], [template+sd,reverse(template-sd)], color=colorfill_sdev, /fill
 				   case mmm of
-				   	0: if (cntnselect_j gt 0) then for j=0,cntnselect_j-1 do xyouts, 0.15+0.33*(mmm), 0.7-j*0.02, str.names(wnselect_j(j)),color=color_rejected[j],size=0.8,/normal
-					1: if (cntnselect_h gt 0) then for j=0,cntnselect_h-1 do xyouts, 0.15+0.33*(mmm), 0.7-j*0.02, str.names(wnselect_h(j)),color=color_rejected[j],size=0.8,/normal
-					2: if (cntnselect_k gt 0) then for j=0,cntnselect_k-1 do xyouts, 0.15+0.33*(mmm), 0.7-j*0.02, str.names(wnselect_k(j)),color=color_rejected[j],size=0.8,/normal
+				   	0: if (cntnselect_j gt 0) then for j=0,cntnselect_j-1 do xyouts, 0.15+0.33*(mmm), 0.7-j*0.02, str.names(wnselect_j(j)),color=color_rejected[i_wnselect_j[j]],size=0.8,/normal
+					1: if (cntnselect_h gt 0) then for j=0,cntnselect_h-1 do xyouts, 0.15+0.33*(mmm), 0.7-j*0.02, str.names(wnselect_h(j)),color=color_rejected[i_wnselect_h[j]],size=0.8,/normal
+					2: if (cntnselect_k gt 0) then for j=0,cntnselect_k-1 do xyouts, 0.15+0.33*(mmm), 0.7-j*0.02, str.names(wnselect_k(j)),color=color_rejected[i_wnselect_k[j]],size=0.8,/normal
 				ENDCASE
 		    	end
 		    	ptype eq 1: begin ;only plot objects selected
@@ -371,9 +409,7 @@ for iloop=0,nloops-1 do begin
 
 		   oplot, str.lam(w), template, thick=2
 		 		  
-		   ;calculate new normalization for template
 		   
-
 		   ; save template
 		   dat = [[str.lam(w)],[template],[sd],[mins_templ],[maxs_templ]]
 		   fxhmake,hdr,dat
@@ -381,21 +417,27 @@ for iloop=0,nloops-1 do begin
 		   writefits, output_fits , dat, hdr
 		   message, 'wrote' + output_fits, /info 
   	 	endif
-	
+
+		;if  (iloop eq nloops-1) then stop
+
 	 endfor ;end loop over 3 (JHK) bands, mmm
 
  	if keyword_set(inter) then begin & print,'press any key to continue' & tmp=GET_KBRD() & endif
-	 ;stop ;after each loop
-	 
+	
 endfor ;end iterative 10 loops, iloop
 
-window,3
-!p.multi=0
-plot, i_loop, i_loop, yr =[0.5,1.1], xr=[-1,nloops+1],/nodata,xstyle=1
-plots,[0,nloops],[1,1]
-oplot, i_loop, chi2_j, psym = 5, color=cyan, symsize=2
-oplot, i_loop, chi2_h, psym = 4, color=green, symsize=2
-oplot, i_loop, chi2_k, psym = 1, color=magenta, symsize=2
+
+if ~keyword_set(ps) then begin
+	window,3
+	!p.multi=0
+	plot, i_loop, i_loop, yr =[0.5,1.1], xr=[-1,nloops+1],/nodata,xstyle=1
+	plots,[0,nloops],[1,1]
+	oplot, i_loop, chi2_j, psym = 5, color=cyan, symsize=2
+	oplot, i_loop, chi2_h, psym = 4, color=green, symsize=2
+	oplot, i_loop, chi2_k, psym = 1, color=magenta, symsize=2
+	;xyouts,0.5,0.5,/normal
+	
+ENDIF
 
 ;WRITE TXT FILES
  tb='	'
@@ -455,7 +497,7 @@ w = where(str.lam ge 0.9 and str.lam le 2.4,cnt)
    
    ;SET UP THE PLOTS
    ;sclt = max(template) = 1
-   	wset,1
+   if ~keyword_set(ps) then wset,1
    	!p.multi=[3,3,2]
    	;find the minimum and max to setup plot
 	flux_mins = fltarr(nspec) & flux_maxs=fltarr(nspec)
