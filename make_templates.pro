@@ -250,22 +250,28 @@ endelse
 
 ; iterative scan, normalizing in individual bands
 lam_norm = [[0.87,1.39],[1.41,1.89],[1.91,2.39]]
-nloops = 6
+max_loops = 10
 
 flags_in = intarr(nspec)
 flags_j = intarr(nspec)
 flags_h = intarr(nspec)
 flags_k = intarr(nspec)
-chi2_j = fltarr(nloops)
-chi2_h = fltarr(nloops)
-chi2_k = fltarr(nloops)
+chi2_j = fltarr(max_loops)
+chi2_h = fltarr(max_loops)
+chi2_k = fltarr(max_loops)
 chi2all = fltarr(nspec,4)
 i_spec = indgen(nspec)
-i_loop = indgen(nloops)
- 
+iloop=0
+loop_stop=0
+loop_stop_j=0
+loop_stop_h=0
+loop_stop_k=0
 ;Make template 10 times to iterativly reject
-for iloop=0,nloops-1 do begin
-		
+
+
+while loop_stop eq 0 do begin
+;for iloop=0,nloops-1 do begin
+
 	;Loop over bands
 	;Reject any spectrum that has chi^2 > 2 compared to template
 	for mmm=0,n_elements(band)-1 do begin
@@ -288,17 +294,22 @@ for iloop=0,nloops-1 do begin
 		case mmm of 
 			0: BEGIN	
 				flags_j = flags_j + flags_one
-				chi2_j[iloop] = mean(chi2[i_keep])			
+				chi2_j[iloop] = mean(chi2[i_keep])
+				if iloop ge 1 then if chi2_j[iloop] eq chi2_j[iloop-1] then loop_stop_j=1			
 			END
 			1: BEGIN
 				flags_h = flags_h + flags_one
 				chi2_h[iloop] = mean(chi2[i_keep])	
+				if iloop ge 1 then if chi2_h[iloop] eq chi2_h[iloop-1] then loop_stop_h=1			
 			END
 			2: BEGIN
 				flags_k = flags_k + flags_one
 				chi2_k[iloop] = mean(chi2[i_keep])	
+				if iloop ge 1 then if chi2_k[iloop] eq chi2_k[iloop-1] then loop_stop_k=1			
 			END
 		endcase
+			
+		if loop_stop_j eq 1 and loop_stop_h eq 1 and loop_stop_k eq 1 then loop_stop =1 else loop_stop =0
 			
 		i_rejects_j = where(flags_j ge 1,cnt_rejects_j)
 		i_rejects_h = where(flags_h ge 1,cnt_rejects_h)
@@ -394,10 +405,6 @@ for iloop=0,nloops-1 do begin
 		    	else: begin ;plot everything
   		   		   if (cnt_keep gt 0) then for j=0,cnt_keep-1 do oplot, str.lam[w], str.flx(w,i_keep[j])/norm_facts[i_keep[j]], color=color_kept, thick=1
 				   if (cnt_rejects gt 0) then for j=0,cnt_rejects-1 do oplot, str.lam(w), str.flx(w,i_rejects[j])/norm_facts(i_rejects[j]), color=color_rejected[j], thick=1
-				   ;polyfill the min-max of the spectra used in the template
-  					;polyfill, [str.lam[w],reverse(str.lam[w])], [max_templ,REVERSE(mins_templ)], color=colorfill_minmax, /fill		   
-				   ;polyfill the standard dev
-  		   		   ;polyfill, [str.lam[w],reverse(str.lam[w])], [template+sd,reverse(template-sd)], color=colorfill_sdev, /fill
 				case mmm of
 				   	0: if (cnt_rejects_j gt 0) then for j=0,cnt_rejects_j-1 do xyouts, 0.15+0.33*(mmm), 0.7-j*0.02, str.names[i_rejects_j[j]],color=color_rejected[ii_rejects_j[j]],size=0.8,/normal
 					1: if (cnt_rejects_h gt 0) then for j=0,cnt_rejects_h-1 do xyouts, 0.15+0.33*(mmm), 0.7-j*0.02, str.names[i_rejects_h[j]],color=color_rejected[ii_rejects_h[j]],size=0.8,/normal
@@ -414,7 +421,8 @@ for iloop=0,nloops-1 do begin
 
 		   oplot, str.lam(w), template, thick=2
 		 		  
-		   if (iloop eq nloops-1) then begin
+		   ;if (iloop eq nloops-1) then begin
+			   if loop_stop eq 1 then begin
 		   ; save template
 		   dat = [[str.lam(w)],[template],[sd],[mins_templ],[maxs_templ]]
 		   fxhmake,hdr,dat
@@ -429,18 +437,21 @@ for iloop=0,nloops-1 do begin
 	 endfor ;end loop over 3 (JHK) bands, mmm
 
  	if keyword_set(interactive) and iloop ge 1 then begin & print,'press any key to continue' & tmp=GET_KBRD() & endif
-	
-endfor ;end iterative 10 loops, iloop
+		iloop++
+endwhile	
+;endfor ;end iterative 10 loops, iloop
 
+nloops=iloop
+i_loop = indgen(nloops)
 
 if ~keyword_set(ps) then begin
 	window,3
 	!p.multi=0
 	plot, i_loop, i_loop, yr =[0.5,1.1], xr=[-1,nloops+1],/nodata,xstyle=1
 	plots,[0,nloops],[1,1]
-	oplot, i_loop, chi2_j, psym = 5, color=cyan, symsize=2
-	oplot, i_loop, chi2_h, psym = 4, color=green, symsize=2
-	oplot, i_loop, chi2_k, psym = 1, color=magenta, symsize=2
+	oplot, i_loop, chi2_j[0:nloops-1], psym = 5, color=cyan, symsize=2
+	oplot, i_loop, chi2_h[0:nloops-1], psym = 4, color=green, symsize=2
+	oplot, i_loop, chi2_k[0:nloops-1], psym = 1, color=magenta, symsize=2
 	;xyouts,0.5,0.5,/normal
 	
 ENDIF
