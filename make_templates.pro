@@ -131,6 +131,12 @@ sqy = [-1,1,1,-1,-1]
 ;tek_color
 @colors_kc
 
+color_rejected=[green,cyan,purple,red,dkgreen,orange,gray,magenta,pink,ltorange,ltgray,purple2,dkred,dkorange,dkgrey,dkpurple, green,cyan,purple,red,dkyellow,dkgreen,orange,gray]
+color_kept=blue
+colorfill_sdev = gray
+colorfill_minmax = vltgray
+
+
 If ~keyword_set(PS) then begin
 	 device, Decomposed=0
 endif
@@ -244,7 +250,7 @@ endelse
 
 ; iterative scan, normalizing in individual bands
 lam_norm = [[0.87,1.39],[1.41,1.89],[1.91,2.39]]
-nloops = 8
+nloops = 6
 
 flags_in = intarr(nspec)
 flags_j = intarr(nspec)
@@ -297,6 +303,13 @@ for iloop=0,nloops-1 do begin
 		i_rejects_j = where(flags_j ge 1,cnt_rejects_j)
 		i_rejects_h = where(flags_h ge 1,cnt_rejects_h)
 		i_rejects_k = where(flags_k ge 1,cnt_rejects_k)
+		
+		if cnt_rejects_j ge 1 then ii_rejects_j = intarr(cnt_rejects_j)
+		if cnt_rejects_h ge 1 then ii_rejects_h = intarr(cnt_rejects_h)
+		if cnt_rejects_k ge 1 then ii_rejects_k = intarr(cnt_rejects_k)
+		for i=0,cnt_rejects_j-1 do ii_rejects_j[i] = where(i_rejects eq i_rejects_j[i])
+		for i=0,cnt_rejects_h-1 do ii_rejects_h[i] = where(i_rejects eq i_rejects_h[i])
+		for i=0,cnt_rejects_k-1 do ii_rejects_k[i] = where(i_rejects eq i_rejects_k[i])
 	 
 	 	if mmm eq 2 then print,iloop,cnt_rejects_j,cnt_rejects_h,cnt_rejects_k
 	 
@@ -319,10 +332,15 @@ for iloop=0,nloops-1 do begin
 				!p.multi=[3-mmm,3,1]
 			endelse			
 			plot, i_spec, chi2, psym=3, title=strn(mmm)	, xr=[-1,nspec],xstyle=1,symsize=2,/ylog
-			if i_rejects[0] ne -1 then oplot, i_spec[i_rejects], chi2[i_rejects], psym=6, symsize=3.5,color=red
-			if i_rejects_j[0] ne -1 then oplot, i_spec[i_rejects_j], chi2[i_rejects_j], psym=5, symsize=3,color=cyan
-			if i_rejects_h[0] ne -1 then oplot, i_spec[i_rejects_h], chi2[i_rejects_h], psym=4, symsize=2,color=green
-			if i_rejects_k[0] ne -1 then oplot, i_spec[i_rejects_k], chi2[i_rejects_k], psym=1, symsize=2,color=magenta
+			if cnt_rejects ge 1 then oplot, i_spec[i_rejects], chi2[i_rejects], psym=6, symsize=3.5,color=red
+			
+			if cnt_rejects_j ge 1 then for j=0,cnt_rejects_j-1 do oplot, [i_spec[i_rejects_j[j]]], [chi2[i_rejects_j[j]]], psym=5, symsize=3,color=color_rejected[ii_rejects_j[j]]
+			if cnt_rejects_h ge 1 then for j=0,cnt_rejects_h-1 do oplot, [i_spec[i_rejects_h[j]]], [chi2[i_rejects_h[j]]], psym=4, symsize=3,color=color_rejected[ii_rejects_h[j]]
+			if cnt_rejects_k ge 1 then for j=0,cnt_rejects_k-1 do oplot, [i_spec[i_rejects_k[j]]], [chi2[i_rejects_k[j]]], psym=4, symsize=3,color=color_rejected[ii_rejects_k[j]]
+			
+			;oplot, i_spec[i_rejects_j], chi2[i_rejects_j], psym=5, symsize=3,color=cyan
+			;if i_rejects_h[0] ne -1 then oplot, i_spec[i_rejects_h], chi2[i_rejects_h], psym=4, symsize=2,color=green
+			;if cnt_rejects_k[0] ge 1 then oplot, i_spec[i_rejects_k], chi2[i_rejects_k], psym=1, symsize=2,color=magenta
 		
 			plots, [0,nspec-1], [mean(chi2[i_keep]), mean(chi2[i_keep])]
 			plots, [0,nspec-1], [sigma,sigma], linestyle=1
@@ -333,28 +351,7 @@ for iloop=0,nloops-1 do begin
 		;flags = flag+f
 		chi2all(*,mmm) = chi2
 		 
-		 
-	; plot out results if at end of loop
-		if (iloop eq nloops-1) then begin
-			;flags=flags_out
-		   	
-			;wnselect = i_rejects
-			;wnselect = where(flags ne 0,cntnselect)
-			
-			;wnselect_x = i_rejects_x
-			;wnselect_j = where(flags_j ne 0,cntnselect_j)
-			;wnselect_h = where(flags_h ne 0,cntnselect_h)
-			;wnselect_k = where(flags_k ne 0,cntnselect_k)
-		   	
-			;wselect = i_keep
-			;wselect = where(flags eq 0,cntselect) 
-			
-			ii_rejects_j = intarr(cnt_rejects_j)
-			ii_rejects_h = intarr(cnt_rejects_h)
-			ii_rejects_k = intarr(cnt_rejects_k)
-			for i=0,cnt_rejects_j-1 do ii_rejects_j[i] = where(i_rejects eq i_rejects_j[i])
-			for i=0,cnt_rejects_h-1 do ii_rejects_h[i] = where(i_rejects eq i_rejects_h[i])
-			for i=0,cnt_rejects_k-1 do ii_rejects_k[i] = where(i_rejects eq i_rejects_k[i])
+		if (iloop ge 1) then begin
 		   
 		   ;SET UP THE PLOTS
 			if mmm eq 0 then begin
@@ -372,11 +369,7 @@ for iloop=0,nloops-1 do begin
 
 		   ;plot template
 		   plot, str.lam(w), template, /xsty, yra=yra,/ysty, xtitle='!3Wavelength (!9m!3m)', ytitle='Normalized Flux', charsize=2, xmargin=[8,2], title=tit
-		   color_rejected=[green,cyan,purple,red,dkgreen,orange,gray,magenta,pink,ltorange,ltgray,purple2,dkred,dkorange,dkgrey,dkpurple, green,cyan,purple,red,dkyellow,dkgreen,orange,gray]
-		   color_kept=blue
-		   colorfill_sdev = gray
-		   colorfill_minmax = vltgray
-			
+		   			
 		   case 1 of 
 		    	ptype eq 0: begin
 					;plot each object rejected from template
@@ -399,8 +392,8 @@ for iloop=0,nloops-1 do begin
   		   		   polyfill, [str.lam[w],reverse(str.lam[w])], [template+sd,reverse(template-sd)], color=colorfill_sdev, /fill
 		    	end
 		    	else: begin ;plot everything
-		     	   if (cnt_rejects gt 0) then for j=0,cnt_rejects-1 do oplot, str.lam(w), str.flx(w,i_rejects[j])/norm_facts(i_rejects[j]), color=color_rejected[j], thick=1
   		   		   if (cnt_keep gt 0) then for j=0,cnt_keep-1 do oplot, str.lam[w], str.flx(w,i_keep[j])/norm_facts[i_keep[j]], color=color_kept, thick=1
+				   if (cnt_rejects gt 0) then for j=0,cnt_rejects-1 do oplot, str.lam(w), str.flx(w,i_rejects[j])/norm_facts(i_rejects[j]), color=color_rejected[j], thick=1
 				   ;polyfill the min-max of the spectra used in the template
   					;polyfill, [str.lam[w],reverse(str.lam[w])], [max_templ,REVERSE(mins_templ)], color=colorfill_minmax, /fill		   
 				   ;polyfill the standard dev
@@ -421,7 +414,7 @@ for iloop=0,nloops-1 do begin
 
 		   oplot, str.lam(w), template, thick=2
 		 		  
-		   
+		   if (iloop eq nloops-1) then begin
 		   ; save template
 		   dat = [[str.lam(w)],[template],[sd],[mins_templ],[maxs_templ]]
 		   fxhmake,hdr,dat
@@ -429,12 +422,13 @@ for iloop=0,nloops-1 do begin
 		   writefits, output_fits , dat, hdr
 		   message, 'wrote' + output_fits, /info 
   	 	endif
+	endif
 
 		;if  (iloop eq nloops-1) then stop
 
 	 endfor ;end loop over 3 (JHK) bands, mmm
 
- 	if keyword_set(inter) then begin & print,'press any key to continue' & tmp=GET_KBRD() & endif
+ 	if keyword_set(interactive) and iloop ge 1 then begin & print,'press any key to continue' & tmp=GET_KBRD() & endif
 	
 endfor ;end iterative 10 loops, iloop
 
@@ -476,25 +470,11 @@ ENDIF
  print, " number selected = ", cnt_keep
  print, " number rejected = ", cnt_rejects
 
- ;=====================
-; repeat for full band
-;=====================
-;flags_in(*) = 0
-
-;for i=0,nloops-1 do begin
-
-	; select "normal" sources
- ;	wselect = where(flags_in eq 0,cntselect)
-	
- 	;if (i ne nloop-1) then flags_in(*) = 0		; reset except for last loop
- ;	if (cntselect eq 0) then message, 'Warning, rejected all sources!'
- 
+;=================== 
+;plot the entire range
+;=================== 
 w = where(str.lam ge 0.9 and str.lam le 2.4,cnt)
-  
-  ;if i eq nloops-1 then begin
-;	  wset,0
-;	  !p.multi=[1,4,1]
-  template_full = kellel_template( str.lam(w), str.flx(w,*), str.flx_unc(w,*), norm_facts=norm_facts,flags_in=flags_in, flags_out=flags_out, sd=sd, sigma=sigma, chi2=chi2,mins_templ=mins_templ,maxs_templ=maxs_templ,no_renorm=no_re_norm)
+template_full = kellel_template( str.lam(w), str.flx(w,*), str.flx_unc(w,*), norm_facts=norm_facts,flags_in=flags_in, flags_out=flags_out, sd=sd, sigma=sigma, chi2=chi2,mins_templ=mins_templ,maxs_templ=maxs_templ,no_renorm=no_re_norm)
 ;  flags_in = flags_out
 
 ; plot out results if at end of loop
@@ -504,7 +484,6 @@ w = where(str.lam ge 0.9 and str.lam le 2.4,cnt)
   ; wselect = where(flags eq 0,cntselect)
    
    ;SET UP THE PLOTS
-   ;sclt = max(template) = 1
    if ~keyword_set(ps) then wset,1
    	!p.multi=[3,3,2]
    	;find the minimum and max to setup plot
@@ -544,9 +523,6 @@ w = where(str.lam ge 0.9 and str.lam le 2.4,cnt)
     end
    endcase
    
-; polyfill, [str.lam[w],reverse(str.lam[w])], [maxs_templ,reverse(mins_templ)], color=colorfill_minmax, /fill
-; polyfill, [str.lam[w],reverse(str.lam[w])], [template_full+sd,reverse(template_full-sd)], color=colorfill_sdev, /fill
-
  oplot, str.lam[w], template_full, thick=3
   
  xyouts, 2.35, yra(1)-0.15*(yra(1)-yra(0)), rstr , align=1, charsize=1.5
