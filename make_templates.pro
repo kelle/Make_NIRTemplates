@@ -49,9 +49,9 @@ if (cntselect eq 0) then message, 'No spectra available for creating template'
 ; first normalization of each spectrum
 
 for j=0,nspec-1 do begin
-  flxns(*,j) = kellel_normalize(lam, flxs(*,j), norm_fact=norm_fact)
-  flxn_uncs(*,j) = flx_uncs(*,j) / norm_fact
-  norm_facts(j) = norm_fact
+  flxns[*,j] = kellel_normalize(lam, flxs[*,j], norm_fact=norm_fact)
+  flxn_uncs[*,j] = flx_uncs[*,j] / norm_fact
+  norm_facts[j] = norm_fact
   ;if j eq 0 then plot, lam, flxns(*,j) else oplot, lam, flxns(*,j)
 endfor
 
@@ -61,8 +61,10 @@ mc_meancomb2, flxns[*,wselect], template_first, datavar=flxn_uncs[*,wselect]
 ; repeat normalization against template
 if ~keyword_set(no_renorm) then begin
 	for j=0,nspec-1 do begin
-		norm_facts(j) = median( flxs[*,j] / template_first );
+		norm_facts[j] = median( flxs[*,j] / template_first );
 		flxns[*,j] = flxs[*,j] / norm_facts[j]
+		flxn_uncs[*,j] = flx_uncs[*,j] / norm_facts[j]
+		;print, 'RENORMIALIZED TO TEMPLATE'
 		;print,min(flxns[*,j]),max(flxns[*,j])
 	endfor
 endif
@@ -91,8 +93,6 @@ for ispec=0,nspec-1 do begin
 	  ;print,'rejected chi2: ', chi2[ispec]
   endif
 endfor
-
-
 
 ;flag = flag<1 ; sets all flags greater than 1 to 1 and leaves 0 unchanged.
 
@@ -220,15 +220,13 @@ if (file_search(strfile) eq '' or keyword_set(reset)) then begin
 	'lam',lam,$
 	'flx',flx,$
 	'flx_unc',flx_unc,$
-	;'snr',snr, $ 
-	;'names',strrep(strrep(strrep(sfiles,dfold,''),'.fits',''),'spex_prism_',''))
 	'names', strrep(strrep(sfiles,dfold,''),'.fits',''))	
  	 
 	 save, str, file=strfile
 
 endif else begin
 	restore, file=strfile
-	MESSAGE,'restoring from file',/info
+	MESSAGE,'restoring spectra from save file, not re-reading',/info
 endelse
 
 nspec=n_elements(str.files)
@@ -268,13 +266,17 @@ for iloop=0,nloops-1 do begin
 
 		w = where(str.lam ge lam_norm(0,mmm) and str.lam le lam_norm(1,mmm),cnt)
 		
-		if iloop ge nloops/2.  then no_renorm = 1 else no_renorm = 0
+		;Always re-normalize
+		no_renorm = 0
+		;renorm for the first half of loops, but not the second
+		;if iloop ge nloops/2.  then no_renorm = 1 else no_renorm = 0
+		;print, iloop,no_renorm
 		
 		;takes flags_in and modifies to reflect new rejects
 		template = kellel_template(str.lam(w), str.flx(w,*), str.flx_unc(w,*), norm_facts=norm_facts, flags_in=flags_in, flags_out=flags_out, flags_one=flags_one,sd=sd, sigma=sigma, chi2=chi2, mins_templ=mins_templ, maxs_templ=maxs_templ,no_renorm=no_renorm)
 		
 		i_keep = where(flags_out eq 0,cnt_keep)
-		i_rejects = where(flags_out ge 1,cnt_reject)
+		i_rejects = where(flags_out ge 1,cnt_rejects)
 				
 		;keep track of band-by-band flags
 		case mmm of 
@@ -292,11 +294,11 @@ for iloop=0,nloops-1 do begin
 			END
 		endcase
 			
-		i_rejects_j = where(flags_j ge 1,cnt_reject_j)
-		i_rejects_h = where(flags_h ge 1,cnt_reject_h)
-		i_rejects_k = where(flags_k ge 1,cnt_reject_k)
+		i_rejects_j = where(flags_j ge 1,cnt_rejects_j)
+		i_rejects_h = where(flags_h ge 1,cnt_rejects_h)
+		i_rejects_k = where(flags_k ge 1,cnt_rejects_k)
 	 
-	 	if mmm eq 2 then print,iloop,cnt_reject_j,cnt_reject_h,cnt_reject_k
+	 	if mmm eq 2 then print,iloop,cnt_rejects_j,cnt_rejects_h,cnt_rejects_k
 	 
 		if (cnt_keep eq 0) then message, 'Warning, rejected all sources!'
 		
@@ -334,21 +336,25 @@ for iloop=0,nloops-1 do begin
 		 
 	; plot out results if at end of loop
 		if (iloop eq nloops-1) then begin
-			flags=flags_out
-		   	wnselect = where(flags ne 0,cntnselect)
-			wnselect_j = where(flags_j ne 0,cntnselect_j)
-			wnselect_h = where(flags_h ne 0,cntnselect_h)
-			wnselect_k = where(flags_k ne 0,cntnselect_k)
-		   	wselect = where(flags eq 0,cntselect) 
+			;flags=flags_out
+		   	
+			;wnselect = i_rejects
+			;wnselect = where(flags ne 0,cntnselect)
 			
-			i_wnselect_j = intarr(cntnselect_j)
-			i_wnselect_h = intarr(cntnselect_h)
-			i_wnselect_k = intarr(cntnselect_k)
-			for i=0,cntnselect_j-1 do i_wnselect_j[i] = where(wnselect eq wnselect_j[i])
-			for i=0,cntnselect_h-1 do i_wnselect_h[i] = where(wnselect eq wnselect_h[i])
-			for i=0,cntnselect_k-1 do i_wnselect_k[i] = where(wnselect eq wnselect_k[i])
+			;wnselect_x = i_rejects_x
+			;wnselect_j = where(flags_j ne 0,cntnselect_j)
+			;wnselect_h = where(flags_h ne 0,cntnselect_h)
+			;wnselect_k = where(flags_k ne 0,cntnselect_k)
+		   	
+			;wselect = i_keep
+			;wselect = where(flags eq 0,cntselect) 
 			
-		   
+			ii_rejects_j = intarr(cnt_rejects_j)
+			ii_rejects_h = intarr(cnt_rejects_h)
+			ii_rejects_k = intarr(cnt_rejects_k)
+			for i=0,cnt_rejects_j-1 do ii_rejects_j[i] = where(i_rejects eq i_rejects_j[i])
+			for i=0,cnt_rejects_h-1 do ii_rejects_h[i] = where(i_rejects eq i_rejects_h[i])
+			for i=0,cnt_rejects_k-1 do ii_rejects_k[i] = where(i_rejects eq i_rejects_k[i])
 		   
 		   ;SET UP THE PLOTS
 			if mmm eq 0 then begin
@@ -374,38 +380,44 @@ for iloop=0,nloops-1 do begin
 		   case 1 of 
 		    	ptype eq 0: begin
 					;plot each object rejected from template
-		     	   if (cntnselect gt 0) then for j=0,cntnselect-1 do oplot, str.lam(w), str.flx(w,wnselect(j))/norm_facts(wnselect(j)), color=color_rejected[j], thick=1
-		     	   ;plot each target included in template
-				   ;if (cntselect gt 0) then for j=0,cntselect-1 do oplot, str.lam(w), str.flx(w,wselect(j))/scl(wselect(j))/sclt, color=color_kept, thick=1
+		     	   if (cnt_rejects gt 0) then for j=0,cnt_rejects-1 do oplot, str.lam(w), str.flx(w,i_rejects[j])/norm_facts[i_rejects[j]], $
+					   color=color_rejected[j], thick=1
   		   		   ;polyfill the min-max of the spectra used in the template
-  		   		   polyfill, [str.lam(w),reverse(str.lam(w))], [maxs_templ,REVERSE(mins_templ)], color=colorfill_minmax, /fill		   
+  		   		   polyfill, [str.lam[w],reverse(str.lam[w])], [maxs_templ,REVERSE(mins_templ)], color=colorfill_minmax, /fill		   
 				   ;polyfill the standard dev
-  		   		   polyfill, [str.lam(w),reverse(str.lam(w))], [template+sd,reverse(template-sd)], color=colorfill_sdev, /fill
-				   case mmm of
-				   	0: if (cntnselect_j gt 0) then for j=0,cntnselect_j-1 do xyouts, 0.15+0.33*(mmm), 0.7-j*0.02, str.names(wnselect_j(j)),color=color_rejected[i_wnselect_j[j]],size=0.8,/normal
-					1: if (cntnselect_h gt 0) then for j=0,cntnselect_h-1 do xyouts, 0.15+0.33*(mmm), 0.7-j*0.02, str.names(wnselect_h(j)),color=color_rejected[i_wnselect_h[j]],size=0.8,/normal
-					2: if (cntnselect_k gt 0) then for j=0,cntnselect_k-1 do xyouts, 0.15+0.33*(mmm), 0.7-j*0.02, str.names(wnselect_k(j)),color=color_rejected[i_wnselect_k[j]],size=0.8,/normal
-				ENDCASE
+  		   		   polyfill, [str.lam[w],reverse(str.lam[w])], [template+sd,reverse(template-sd)], color=colorfill_sdev, /fill
+				   ;print out the names of rejected objects
+					case mmm of
+					   	0: if (cnt_rejects_j gt 0) then for j=0,cnt_rejects_j-1 do xyouts, 0.15+0.33*(mmm), 0.7-j*0.02, str.names[i_rejects_j[j]],color=color_rejected[ii_rejects_j[j]],size=0.8,/normal
+						1: if (cnt_rejects_h gt 0) then for j=0,cnt_rejects_h-1 do xyouts, 0.15+0.33*(mmm), 0.7-j*0.02, str.names[i_rejects_h[j]],color=color_rejected[ii_rejects_h[j]],size=0.8,/normal
+						2: if (cnt_rejects_k gt 0) then for j=0,cnt_rejects_k-1 do xyouts, 0.15+0.33*(mmm), 0.7-j*0.02, str.names[i_rejects_k[j]],color=color_rejected[ii_rejects_k[j]],size=0.8,/normal
+					ENDCASE
 		    	end
-		    	ptype eq 1: begin ;only plot objects selected
-		     	   if (cntselect gt 0) then for j=0,cntselect-1 do oplot, str.lam(w), str.flx(w,wselect(j))/scl(wselect(j))/sclt, color=color_kept, thick=1
+		    	ptype eq 1: begin ;only plot objects selected & the std dev
+		     	   if (cnt_keep gt 0) then for j=0,cnt_keep-1 do oplot, str.lam[w], str.flx(w,i_keep[j])/norm_facts[i_keep[j]], color=color_kept, thick=1
 				   ;polyfill the standard dev of the template
-  		   		   polyfill, [str.lam(w),reverse(str.lam(w))], [template+sd,reverse(template-sd)]/sclt, color=colorfill_sdev, /fill
+  		   		   polyfill, [str.lam[w],reverse(str.lam[w])], [template+sd,reverse(template-sd)], color=colorfill_sdev, /fill
 		    	end
-		    	else: begin ;only plot objects NOT selected	
-		     	   if (cntnselect gt 0) then for j=0,cntnselect-1 do oplot, str.lam(w), str.flx(w,wnselect(j))/norm_facts(wnselect(j))/sclt, color=color_rejected[j], thick=1
-  		   		   ;polyfill the min-max of the spectra used in the template
-  		   		   polyfill, [str.lam(w),reverse(str.lam(w))], [max_templ,REVERSE(min_templ)]/sclt, color=colorfill_minmax, /fill		   
+		    	else: begin ;plot everything
+		     	   if (cnt_rejects gt 0) then for j=0,cnt_rejects-1 do oplot, str.lam(w), str.flx(w,i_rejects[j])/norm_facts(i_rejects[j]), color=color_rejected[j], thick=1
+  		   		   if (cnt_keep gt 0) then for j=0,cnt_keep-1 do oplot, str.lam[w], str.flx(w,i_keep[j])/norm_facts[i_keep[j]], color=color_kept, thick=1
+				   ;polyfill the min-max of the spectra used in the template
+  					;polyfill, [str.lam[w],reverse(str.lam[w])], [max_templ,REVERSE(mins_templ)], color=colorfill_minmax, /fill		   
 				   ;polyfill the standard dev
-  		   		   polyfill, [str.lam(w),reverse(str.lam(w))], [template+sd,reverse(template-sd)]/sclt, color=colorfill_sdev, /fill
+  		   		   ;polyfill, [str.lam[w],reverse(str.lam[w])], [template+sd,reverse(template-sd)], color=colorfill_sdev, /fill
+				case mmm of
+				   	0: if (cnt_rejects_j gt 0) then for j=0,cnt_rejects_j-1 do xyouts, 0.15+0.33*(mmm), 0.7-j*0.02, str.names[i_rejects_j[j]],color=color_rejected[ii_rejects_j[j]],size=0.8,/normal
+					1: if (cnt_rejects_h gt 0) then for j=0,cnt_rejects_h-1 do xyouts, 0.15+0.33*(mmm), 0.7-j*0.02, str.names[i_rejects_h[j]],color=color_rejected[ii_rejects_h[j]],size=0.8,/normal
+					2: if (cnt_rejects_k gt 0) then for j=0,cnt_rejects_k-1 do xyouts, 0.15+0.33*(mmm), 0.7-j*0.02, str.names[i_rejects_k[j]],color=color_rejected[ii_rejects_k[j]],size=0.8,/normal
+				ENDCASE
 		    	end
 		   endcase
 		   
 		   ;polyfill the min-max
-		   polyfill, [str.lam(w),reverse(str.lam(w))], [maxs_templ,REVERSE(mins_templ)], color=colorfill_minmax, /fill
+		   ;polyfill, [str.lam(w),reverse(str.lam(w))], [maxs_templ,REVERSE(mins_templ)], color=colorfill_minmax, /fill
 		   
 		   ;polyfill the standard dev
-		   polyfill, [str.lam(w),reverse(str.lam(w))], [template+sd,reverse(template-sd)], color=colorfill_sdev, /fill
+		   ;polyfill, [str.lam(w),reverse(str.lam(w))], [template+sd,reverse(template-sd)], color=colorfill_sdev, /fill
 
 		   oplot, str.lam(w), template, thick=2
 		 		  
@@ -442,31 +454,27 @@ ENDIF
 ;WRITE TXT FILES
  tb='	'
  openw, unit, ofold+fbase+'_band_rejects.txt', /get_lun
- ;wnselect = where(flags ne 0,cntnselect)
- printf, unit, '# '+strtrim(string(cntnselect),2)+' '+spt+' dwarfs rejected from template construction because '
+ printf, unit, '# '+strtrim(string(cnt_keep),2)+' '+spt+' dwarfs rejected from template construction because '
  printf, unit, '# reduced chi2 > '+strtrim(string(sigma),2)+' in any band (but not full spectrum)'
  printf, unit, '# Name'+tb+'J chi2'+tb+'H chi2'+tb+'K chi2'
- if (cntnselect gt 0) then for i=0,cntnselect-1 do printf, unit, str.names(wnselect(i))+' '+tb+strtrim(string(chi2all(wnselect(i),0)),2)+tb+strtrim(string(chi2all(wnselect(i),1)),2)+tb+strtrim(string(chi2all(wnselect(i),2)),2)
- ;if (cntnselect gt 0) then for i=0,cntnselect-1 do printf, unit, str.file(wnselect(i))+tb+strtrim(string(chi2all(wnselect(i),0)),2)+tb+strtrim(string(chi2all(wnselect(i),1)),2)+tb+strtrim(string(chi2all(wnselect(i),2)),2)
+ if (cnt_rejects gt 0) then for i=0,cnt_rejects-1 do printf, unit, str.names(i_rejects[i])+' '+tb+strtrim(string(chi2all(i_rejects[i],0)),2)+tb+strtrim(string(chi2all(i_rejects[i],1)),2)+tb+strtrim(string(chi2all(i_rejects[i],2)),2)
  close, unit
  free_lun, unit
 
  openw, unit, ofold+fbase+'_band_keepers.txt', /get_lun
- ;wselect = where(flags eq 0,cntselect)
- printf, unit, '# '+strtrim(string(cntselect),2)+' '+spt+' dwarfs used for template construction because'
+ printf, unit, '# '+strtrim(string(cnt_keep),2)+' '+spt+' dwarfs used for template construction because'
  printf, unit, '# reduced chi2 < '+strtrim(string(sigma),2)+' in all bands (but not full spectrum)'
  printf, unit, '# Name'+tb+'J chi2'+tb+'H chi2'+tb+'K chi2'
- if (cntselect gt 0) then for i=0,cntselect-1 do printf, unit, str.names(wselect(i))+' ' + tb+strtrim(string(chi2all(wselect(i),0)),2)+tb+strtrim(string(chi2all(wselect(i),1)),2)+tb+strtrim(string(chi2all(wselect(i),2)),2)
- ;if (cntselect gt 0) then for i=0,cntselect-1 do printf, unit, str.file(wselect(i))+tb+strtrim(string(chi2all(wselect(i),0)),2)+tb+strtrim(string(chi2all(wselect(i),1)),2)+tb+strtrim(string(chi2all(wselect(i),2)),2)
+ if (cnt_keep gt 0) then for i=0,cnt_keep-1 do printf, unit, str.names(i_keep[i])+' ' + tb+strtrim(string(chi2all(i_keep[i],0)),2)+tb+strtrim(string(chi2all(i_keep[i],1)),2)+tb+strtrim(string(chi2all[i_keep[i]],2),2)
  close, unit
  free_lun, unit
 
- rstr = spt + '!C'+'!9s!3 = '+strtrim(string(sigma),2)+' N_kept = '+strtrim(string(cntselect),2)+'!C'+ 'N_reject = '+strtrim(string(cntnselect),2)+'!C'+'N_spec = '+strtrim(string(cntselect+cntnselect),2)
+ rstr = spt + '!C'+'!9s!3 = '+strtrim(string(sigma),2)+' N_kept = '+strtrim(string(cnt_keep),2)+'!C'+ 'N_reject = '+strtrim(string(cnt_rejects),2)+'!C'+'N_spec = '+strtrim(string(cnt_keep+cnt_rejects),2)
 
- if wnselect[0] eq -1 then print, 'no band-by-band rejects'; else print, "band-by-band rejects:", str.names(wnselect)
+ if i_rejects[0] eq -1 then print, 'no band-by-band rejects'; else print, "band-by-band rejects:", str.names(wnselect)
 
- print, " number selected = ", cntselect
- print, " number rejected = ", cntnselect
+ print, " number selected = ", cnt_keep
+ print, " number rejected = ", cnt_rejects
 
  ;=====================
 ; repeat for full band
@@ -486,7 +494,7 @@ w = where(str.lam ge 0.9 and str.lam le 2.4,cnt)
   ;if i eq nloops-1 then begin
 ;	  wset,0
 ;	  !p.multi=[1,4,1]
-  template_full = kellel_template( str.lam(w), str.flx(w,*), str.flx_unc(w,*), norm_facts=norm_facts,flags_in=flags_in, flags_out=flags_out, sd=sd, sigma=sigma, chi2=chi2,mins_templ=mins_templ,maxs_templ=maxs_templ)
+  template_full = kellel_template( str.lam(w), str.flx(w,*), str.flx_unc(w,*), norm_facts=norm_facts,flags_in=flags_in, flags_out=flags_out, sd=sd, sigma=sigma, chi2=chi2,mins_templ=mins_templ,maxs_templ=maxs_templ,no_renorm=no_re_norm)
 ;  flags_in = flags_out
 
 ; plot out results if at end of loop
@@ -513,33 +521,38 @@ w = where(str.lam ge 0.9 and str.lam le 2.4,cnt)
 
    case 1 of 
     ptype eq 0: begin
-     if (cntnselect gt 0) then begin
-	 	for j=0,cntnselect-1 do begin 
-		 	oplot, str.lam(w), str.flx(w,wnselect(j))/norm_facts(wnselect(j)), color=color_rejected[j], thick=1
-			;xyouts, 0.95, yra(1)-0.15*j/2.5*(yra(1)-yra(0)), str.names(wnselect(j)),color=color_rejected[j],size=0.8
-		endfor
-	endif
-     ;if (cntselect gt 0) then for j=0,cntselect-1 do oplot, str.lam(w), str.flx(w,wselect(j))/scl(wselect(j))/sclt, color=color_kept, thick=2
+    	if (cnt_rejects gt 0) then begin
+	 		for j=0,cnt_rejects-1 do begin 
+		 		oplot, str.lam[w], str.flx(w,i_rejects[j])/norm_facts[i_rejects[j]], color=color_rejected[j], thick=1
+				;xyouts, 0.95, yra(1)-0.15*j/2.5*(yra(1)-yra(0)), str.names(wnselect(j)),color=color_rejected[j],size=0.8
+			endfor
+		endif
+	    polyfill, [str.lam[w],reverse(str.lam[w])], [maxs_templ,reverse(mins_templ)], color=colorfill_minmax, /fill
+	    polyfill, [str.lam[w],reverse(str.lam[w])], [template_full+sd,reverse(template_full-sd)], color=colorfill_sdev, /fill
+		
     end
-    ptype eq 1: begin
-     if (cntselect gt 0) then for j=0,cntselect-1 do oplot, str.lam(w), str.flx(w,wselect(j))/norm_facts(wselect(j)), color=color_kept, thick=2
+    ptype eq 1: begin ;only plot keepers and the std dev
+		if (cnt_keep gt 0) then for j=0,cnt_keep-1 do oplot, str.lam[w], str.flx(w,i_keep[j])/norm_facts[i_keep[j]], color=color_kept, thick=2
+	    ;polyfill, [str.lam[w],reverse(str.lam[w])], [maxs_templ,reverse(mins_templ)], color=colorfill_minmax, /fill
+	    polyfill, [str.lam[w],reverse(str.lam[w])], [template_full+sd,reverse(template_full-sd)], color=colorfill_sdev, /fill
+		
     end
-    else: begin
-     if (cntnselect gt 0) then for j=0,cntnselect-1 do oplot, str.lam(w), str.flx(w,wnselect(j))/norm_facts(wnselect(j)), color=color_rejected[j], thick=1
+    else: begin ;only plot rejects
+		if (cnt_rejects gt 0) then for j=0,cnt_rejects-1 do oplot, str.lam[w], str.flx(w,i_rejects[j])/norm_facts[i_rejects[j]], color=color_rejected[j], thick=1
+	    polyfill, [str.lam[w],reverse(str.lam[w])], [maxs_templ,reverse(mins_templ)], color=colorfill_minmax, /fill
+	    polyfill, [str.lam[w],reverse(str.lam[w])], [template_full+sd,reverse(template_full-sd)], color=colorfill_sdev, /fill		
     end
    endcase
    
- polyfill, [str.lam(w),reverse(str.lam(w))], [maxs_templ,reverse(mins_templ)], color=colorfill_minmax, /fill
- polyfill, [str.lam(w),reverse(str.lam(w))], [template_full+sd,reverse(template_full-sd)], color=colorfill_sdev, /fill
+; polyfill, [str.lam[w],reverse(str.lam[w])], [maxs_templ,reverse(mins_templ)], color=colorfill_minmax, /fill
+; polyfill, [str.lam[w],reverse(str.lam[w])], [template_full+sd,reverse(template_full-sd)], color=colorfill_sdev, /fill
 
-
-   oplot, str.lam(w), template_full, thick=3
-
-   ;xyouts, 2.35, yra(1)-0.15*(yra(1)-yra(0)), '!9s!3 = '+strtrim(string(fix(sigma)),2), align=1, charsize=1.5
-   xyouts, 2.35, yra(1)-0.15*(yra(1)-yra(0)), rstr , align=1, charsize=1.5
+ oplot, str.lam[w], template_full, thick=3
+  
+ xyouts, 2.35, yra(1)-0.15*(yra(1)-yra(0)), rstr , align=1, charsize=1.5
 
 ; save template
-   dat = [[str.lam(w)],[template_full],[sd]]
+   dat = [[str.lam[w]],[template_full],[sd]]
    fxhmake,hdr,dat
    writefits, ofold+spt+'_template_FULL.fits', dat, hdr
   ;endif
@@ -552,7 +565,6 @@ w = where(str.lam ge 0.9 and str.lam le 2.4,cnt)
 ; if (cntnselect gt 0) then for i=0,cntnselect-1 do printf, unit, str.names(wnselect(i))+tb+strtrim(string(chi2all(wnselect(i),0)),2)+tb+strtrim(string(chi2all(wnselect(i),1)),2)+tb+strtrim(string(chi2all(wnselect(i),2)),2) else printf, unit, 'No rejects'
 ; close, unit
 ; free_lun, unit
-
  
 !p.multi=0
 
@@ -560,7 +572,6 @@ if keyword_set(ps) then begin
 	device, /close
 	set_plot, 'x'
 endif
-
 
 FINISH: return
 end
