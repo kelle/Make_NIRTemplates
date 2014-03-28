@@ -174,35 +174,38 @@ print, 'ptype: ', strn(ptype)
 sfold = bfold+spt+'/'
 spec_fold = '/Users/kelle/Dropbox/Data/nir_spectra_low/'
 dfold = sfold+spt+'s/'
-slist = dfold+spt+'s_in.txt'
+;slist = dfold+spt+'s_in.txt'
+slist = bfold+'spectra_in.txt'
 ofold = sfold+'output_'+spt+'/'
 strfile = sfold+'spectra.dat'
 band = ['J','H','K']
 
-if (file_search(sfold) eq '' or file_search(dfold) eq '') then begin
-	print, 'cannot find '+sfold+' or '+dfold
-	goto, FINISH
-endif
-if (file_search(ofold) eq '') then begin
-	spawn, 'mkdir '+ofold
-	print, 'created directory: ' + ofold
-endif
+; if (file_search(sfold) eq '' or file_search(dfold) eq '') then begin
+; 	print, 'cannot find '+sfold+' or '+dfold
+; 	goto, FINISH
+; endif
+; if (file_search(ofold) eq '') then begin
+; 	spawn, 'mkdir '+ofold
+; 	print, 'created directory: ' + ofold
+; endif
 
 if (file_search(strfile) eq '' or keyword_set(reset)) then begin
 	MESSAGE,'re-selecting spectra',/info
 	
 	;use .txt file if present, otherwise use all spectra in folder
-	if file_search(slist) eq '' then begin
-		sfiles = file_search(dfold+'*.fits')
-		spec_fold='' 
-		MESSAGE,'using spectra in ' + dfold, /info
-	endif else begin
-		READCOL,slist,sfiles,format='A'
-		sfiles=sfiles 
+	; if file_search(slist) eq '' then begin
+	; 	sfiles = file_search(dfold+'*.fits')
+	; 	spec_fold='' 
+	; 	MESSAGE,'using spectra in ' + dfold, /info
+	; endif 
+		READCOL,slist,sfiles_all,stypes,format='AI',DELIM = string(9b) 
 		MESSAGE,'using spectra listed in ' + slist,/info
-	endelse
+	; endelse
 	
-	for ifile=0,n_elements(sfiles)-1 do begin
+	sfiles=sfiles_all[where(stypes eq type+10,cnt_files)]
+	Message, 'reading in '+ strn(cnt_files) +' files where type=' +strn(type+10),/info
+	
+	for ifile=0,cnt_files-1 do begin
 	 fits = READFITS(spec_fold+sfiles(ifile),hd,/silent)
 	 if (ifile eq 0) then begin
 		 ;setup the arrays
