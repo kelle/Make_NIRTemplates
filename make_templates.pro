@@ -110,7 +110,7 @@ pro make_templates, type=type, btypes=btypes, reset=reset, sigma=sigma, ptype=pt
 ;     print, "Syntax -  print, 'kellel, type=type, [/RESET, sigma=, ptype, batch, /PS]' "
 ; 	print, "type = 2 = L2. default sigma=2, type=1,ptype=0"
 ; print, "ptype = 0 (default, all), 1 (kept+template), 2 (rejects+template)"
-; print, "Do more than one spectral typo at once with /batch then type=[1,4]"
+; print, "Do more than one spectral typo at once with /batch then btypes=[1,4] or indgen(9)"
 ;     return
 ; endif
 	
@@ -147,7 +147,7 @@ bfold = fold_root
 ; spfold = '/Users/adam/spectra/spex/prism/'
 ; filtfold = '/Users/adam/idl/filters/'
 if (n_elements(sigma) eq 0) then sigma=2.
-if (n_elements(type) eq 0) then type=1
+if (n_elements(type) eq 0 and ~keyword_set(batch)) then message, 'must specify type or btypes'
 if (n_elements(ptype) eq 0) then ptype=0
 
 ; -----------------------------
@@ -157,9 +157,10 @@ if (n_elements(ptype) eq 0) then ptype=0
 if (keyword_set(batch)) then begin
   ;types = indgen(3)+1
   for i=0,n_elements(btypes)-1 do begin
-   for j=0,2 do begin
-    for k=1,2 do kellel, type=btypes(i), ptype=j, sigma=k*1. , ps=ps
-   endfor
+   ;for j=0,2 do begin
+    ;for k=1,2 do make_templates, type=btypes[i], ptype=ptype, sigma=k*1. , ps=ps, reset=reset
+	make_templates, type=btypes[i], ptype=ptype, sigma=sigma , ps=ps, reset=reset
+   ;endfor
   endfor
   goto, FINISH
  endif
@@ -423,6 +424,11 @@ while loop_stop eq 0 do begin
 		   if mmm eq 1 then plot, str.lam(w), template, /xsty, yra=yra,/ysty, charsize=2, xmargin=[6,0]
 		   if mmm eq 2 then plot, str.lam(w), template, /xsty, yra=yra,/ysty, charsize=2, xmargin=[4,2]
 		   
+		   ;set up label locations
+		   name_loc_x=0.14
+		   name_loc_offset_x=0.3
+		   name_loc_y=0.45
+		   
 		   case 1 of 
 		    	ptype eq 0: begin
 					;plot each object rejected from template
@@ -433,10 +439,7 @@ while loop_stop eq 0 do begin
 				   ;polyfill the standard dev
   		   		   polyfill, [str.lam[w],reverse(str.lam[w])], [template+sd,reverse(template-sd)], color=colorfill_sdev, /fill
 				   ;print out the names of rejected objects
-				   name_loc_x=0.14
-				   name_loc_offset_x=0.3
-				   name_loc_y=0.45
-					case mmm of
+				   	case mmm of
 					   	0: if (cnt_rejects_j gt 0) then for j=0,cnt_rejects_j-1 do xyouts, name_loc_x+name_loc_offset_x*(mmm), name_loc_y-j*0.02, str.names[i_rejects_j[j]],color=color_rejected[ii_rejects_j[j]],size=0.8,/normal
 						1: if (cnt_rejects_h gt 0) then for j=0,cnt_rejects_h-1 do xyouts, name_loc_x+name_loc_offset_x*(mmm), name_loc_y-j*0.02, str.names[i_rejects_h[j]],color=color_rejected[ii_rejects_h[j]],size=0.8,/normal
 						2: if (cnt_rejects_k gt 0) then for j=0,cnt_rejects_k-1 do xyouts, name_loc_x+name_loc_offset_x*(mmm), name_loc_y-j*0.02, str.names[i_rejects_k[j]],color=color_rejected[ii_rejects_k[j]],size=0.8,/normal
@@ -489,7 +492,7 @@ i_loop = indgen(nloops)
 ;WRITE TXT FILES
  tb='	'
  openw, unit, ofold+fbase+'_band_rejects.txt', /get_lun
- printf, unit, '# '+strtrim(string(cnt_keep),2)+' '+spt+' dwarfs rejected from template construction because '
+ printf, unit, '# '+strtrim(string(cnt_rejects),2)+' '+spt+' dwarfs rejected from template construction because '
  printf, unit, '# reduced chi2 > '+strtrim(string(sigma),2)+' in any band (but not full spectrum)'
  printf, unit, '# Name'+tb+'J chi2'+tb+'H chi2'+tb+'K chi2'
  if (cnt_rejects gt 0) then for i=0,cnt_rejects-1 do printf, unit, str.names(i_rejects[i])+' '+tb+strtrim(string(chi2all(i_rejects[i],0)),2)+tb+strtrim(string(chi2all(i_rejects[i],1)),2)+tb+strtrim(string(chi2all(i_rejects[i],2)),2)
