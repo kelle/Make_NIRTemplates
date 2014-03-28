@@ -177,51 +177,42 @@ spec_fold = '/Users/kelle/Dropbox/Data/nir_spectra_low/'
 dfold = sfold+spt+'s/'
 ;slist = dfold+spt+'s_in.txt'
 slist = bfold+'spectra_in.txt'
-ofold = sfold+'output_'+spt+'/'
-strfile = sfold+'spectra.dat'
+txt_fold = bfold+'NIRSpecFigures/' ;sfold+'output_'+spt+'/'
+ofold = bfold
+temp_fold = bfold+'templates/'
+strfile = bfold+'save_files/spectra'+spt+'.dat'
 band = ['J','H','K']
-
-; if (file_search(sfold) eq '' or file_search(dfold) eq '') then begin
-; 	print, 'cannot find '+sfold+' or '+dfold
-; 	goto, FINISH
-; endif
-; if (file_search(ofold) eq '') then begin
-; 	spawn, 'mkdir '+ofold
-; 	print, 'created directory: ' + ofold
-; endif
 
 if (file_search(strfile) eq '' or keyword_set(reset)) then begin
 	MESSAGE,'re-selecting spectra',/info
 	
-	;use .txt file if present, otherwise use all spectra in folder
-	; if file_search(slist) eq '' then begin
-	; 	sfiles = file_search(dfold+'*.fits')
-	; 	spec_fold='' 
-	; 	MESSAGE,'using spectra in ' + dfold, /info
-	; endif 
-		READCOL,slist,sfiles_all,stypes,format='AI',DELIM = string(9b) 
-		MESSAGE,'using spectra listed in ' + slist,/info
-	; endelse
+	READCOL,slist,sfiles_all,stypes,format='AI',DELIM = string(9b) 
+	MESSAGE,'using spectra listed in ' + slist,/info
 	
 	sfiles=sfiles_all[where(stypes eq type+10,cnt_files)]
 	Message, 'reading in '+ strn(cnt_files) +' files where type=' +strn(type+10),/info
 	
+	;====================
+	; BOOTSTRAP GOES HERE
+	;  
+	; i_files_choosen = int(n_spec * randu(19))
+ 	; files_chosen = files[i_files_chosen]
+	;
+	;====================
+	
 	for ifile=0,cnt_files-1 do begin
-	 fits = READFITS(spec_fold+sfiles(ifile),hd,/silent)
+	 fits = READFITS(spec_fold+sfiles[ifile],hd,/silent)
+	 
 	 if (ifile eq 0) then begin
 		 ;setup the arrays
 	  lam = fits(*,0)
-	  flx = fltarr(n_elements(lam),n_elements(sfiles))
+	  flx = fltarr(n_elements(lam),cnt_files)
 	  flx_unc = flx*0.
-	  ;wnorm = where(lam ge 1.2 and lam le 1.3)		; initial normalization
 	 endif
+	 
 	 ;interpolate onto wavelength of first object
 	 flx(*,ifile) = interpol(fits(*,1),fits(*,0),lam)
-	 ;mx = max(flx(wnorm,ifile))
-	 ;flx(*,ifile) = flx(*,ifile)/mx
 	 flx_unc(*,ifile) = interpol(fits[*,2],fits[*,0],lam)
-	 ;snr(ifile) = max(smooth(flx(*,ifile)/ns(*,ifile),9))
-	 ;plot, lam,flx(*,ifile)
 	endfor
 
 	str = create_struct($
@@ -232,7 +223,6 @@ if (file_search(strfile) eq '' or keyword_set(reset)) then begin
 	'names', strrep(strrep(sfiles,dfold,''),'.fits',''))	
  	 
 	 save, str, file=strfile
-
 endif else begin
 	restore, file=strfile
 	MESSAGE,'restoring spectra from save file, not re-reading',/info
@@ -242,8 +232,6 @@ nspec=n_elements(str.files)
 print,'nspec=',nspec
 
 fbase = 'comp_'+spt+'_s'+strmid(strtrim(string(sigma),2),0,3)
-
-
 
 ; iterative scan, normalizing in individual bands
 lam_norm = [[0.87,1.39],[1.41,1.89],[1.91,2.39]]
@@ -453,29 +441,24 @@ while loop_stop eq 0 do begin
 		    	else: begin ;plot everything
   		   		   if (cnt_keep gt 0) then for j=0,cnt_keep-1 do oplot, str.lam[w], str.flx(w,i_keep[j])/norm_facts[i_keep[j]], color=color_kept, thick=1
 				   if (cnt_rejects gt 0) then for j=0,cnt_rejects-1 do oplot, str.lam(w), str.flx(w,i_rejects[j])/norm_facts(i_rejects[j]), color=color_rejected[j], thick=1
-				case mmm of
-				   	0: if (cnt_rejects_j gt 0) then for j=0,cnt_rejects_j-1 do xyouts, name_loc_x+0.33*(mmm), name_loc_y-j*0.02, str.names[i_rejects_j[j]],color=color_rejected[ii_rejects_j[j]],size=0.8,/normal
-					1: if (cnt_rejects_h gt 0) then for j=0,cnt_rejects_h-1 do xyouts, name_loc_x+0.33*(mmm), name_loc_y-j*0.02, str.names[i_rejects_h[j]],color=color_rejected[ii_rejects_h[j]],size=0.8,/normal
-					2: if (cnt_rejects_k gt 0) then for j=0,cnt_rejects_k-1 do xyouts, name_loc_x+0.33*(mmm), name_loc_y-j*0.02, str.names[i_rejects_k[j]],color=color_rejected[ii_rejects_k[j]],size=0.8,/normal
-				ENDCASE
+					case mmm of
+					   	0: if (cnt_rejects_j gt 0) then for j=0,cnt_rejects_j-1 do xyouts, name_loc_x+0.33*(mmm), name_loc_y-j*0.02, str.names[i_rejects_j[j]],color=color_rejected[ii_rejects_j[j]],size=0.8,/normal
+						1: if (cnt_rejects_h gt 0) then for j=0,cnt_rejects_h-1 do xyouts, name_loc_x+0.33*(mmm), name_loc_y-j*0.02, str.names[i_rejects_h[j]],color=color_rejected[ii_rejects_h[j]],size=0.8,/normal
+						2: if (cnt_rejects_k gt 0) then for j=0,cnt_rejects_k-1 do xyouts, name_loc_x+0.33*(mmm), name_loc_y-j*0.02, str.names[i_rejects_k[j]],color=color_rejected[ii_rejects_k[j]],size=0.8,/normal
+					ENDCASE
 		    	end
 		   endcase
-
 		   oplot, str.lam(w), template, thick=2
-		 		  
-	   endif;end make_plot
+   		endif ;end make_plot
 		
-		   ;if (iloop eq nloops-1) then begin
-	 if loop_stop eq 1 then begin
+	 	;if loop_stop eq 1 then begin
 		   ; save template
 		   dat = [[str.lam(w)],[template],[sd],[mins_templ],[maxs_templ]]
 		   fxhmake,hdr,dat
-		   output_fits = ofold+spt+'_template_'+band(mmm)+'.fits'
+		   output_fits = temp_fold+spt+'_template_'+band(mmm)+'.fits'
 		   writefits, output_fits , dat, hdr
 		   message, 'wrote' + output_fits, /info 
- 	  endif
-
-		;if  (iloop eq nloops-1) then stop
+ 	  	;endif
 
 	endfor ;end loop over 3 (JHK) bands, mmm
 
@@ -491,7 +474,7 @@ i_loop = indgen(nloops)
 
 ;WRITE TXT FILES
  tb='	'
- openw, unit, ofold+fbase+'_band_rejects.txt', /get_lun
+ openw, unit, txt_fold+fbase+'_band_rejects.txt', /get_lun
  printf, unit, '# '+strtrim(string(cnt_rejects),2)+' '+spt+' dwarfs rejected from template construction because '
  printf, unit, '# reduced chi2 > '+strtrim(string(sigma),2)+' in any band (but not full spectrum)'
  printf, unit, '# Name'+tb+'J chi2'+tb+'H chi2'+tb+'K chi2'
@@ -499,7 +482,7 @@ i_loop = indgen(nloops)
  close, unit
  free_lun, unit
 
- openw, unit, ofold+fbase+'_band_keepers.txt', /get_lun
+ openw, unit, txt_fold+fbase+'_band_keepers.txt', /get_lun
  printf, unit, '# '+strtrim(string(cnt_keep),2)+' '+spt+' dwarfs used for template construction because'
  printf, unit, '# reduced chi2 < '+strtrim(string(sigma),2)+' in all bands (but not full spectrum)'
  printf, unit, '# Name'+tb+'J chi2'+tb+'H chi2'+tb+'K chi2'
@@ -563,7 +546,7 @@ template_full = kellel_template( str.lam(w), str.flx(w,*), str.flx_unc(w,*), nor
 ; save template
    dat = [[str.lam[w]],[template_full],[sd]]
    fxhmake,hdr,dat
-   writefits, ofold+spt+'_template_FULL.fits', dat, hdr
+   writefits, temp_fold+spt+'_template_FULL.fits', dat, hdr
   ;endif
 ;endfor
 
