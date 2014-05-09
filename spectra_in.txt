@@ -84,7 +84,6 @@ U50246_0034-0706.fits	13
 j1821+14prismtcadam.fits	14
 spex_prism_1126-5003_061221dl.fits	14
 spex_prism_1928-4356_080908.fits	14
-spex_prism_2206-4217_080714.fits	14
 spex_prism_U12091_060821.fits	14
 spex_prism_U20791_060821.fits	14
 U10196_0337-1758.fits	14
@@ -92,9 +91,7 @@ U10954_spex-prism_1104+1959_20030521_BUR04B.fits	14
 U12101_2158-1550_davy.fits	14
 U12128_2224-0158.fits	14
 U13016.fits	14
-U20179.fits	14
 U20570.fits	14
-U20622.fits	14
 U20994_j2317-4838prismtc1_dagny.fits	14
 U50456_0330-0025.fits	14
 2M1507.fits	15
