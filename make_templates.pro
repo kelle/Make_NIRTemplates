@@ -103,7 +103,7 @@ end
 ; -----------------------------
 ; MAIN ROUTINE
 ; -----------------------------
-pro make_templates, type=type, btypes=btypes, reset=reset, sigma=sigma, ptype=ptype, batch=batch, ps=ps, interactive=interactive
+pro make_templates, type=type, btypes=btypes, reset=reset, sigma=sigma, ptype=ptype, batch=batch, ps=ps, interactive=interactive, young=young
 
 ; if N_params() lt 1 then begin
 ; 	print, n_params()
@@ -159,7 +159,7 @@ if (keyword_set(batch)) then begin
   for i=0,n_elements(btypes)-1 do begin
    ;for j=0,2 do begin
     ;for k=1,2 do make_templates, type=btypes[i], ptype=ptype, sigma=k*1. , ps=ps, reset=reset
-	make_templates, type=btypes[i], ptype=ptype, sigma=sigma , ps=ps, reset=reset
+	make_templates, type=btypes[i], ptype=ptype, sigma=sigma , ps=ps, reset=reset,young=young
    ;endfor
   endfor
   goto, FINISH
@@ -170,13 +170,17 @@ if (keyword_set(batch)) then begin
 ; -----------------------------
 
 spt = 'L'+strmid(strtrim(string(type),2),0,1)
+if keyword_set(young) then spt = spt+'lg'
 print, spt, '  chi^2: ',strn(sigma)
-print, 'ptype: ', strn(ptype)
+print, 'p(lot) type: ', strn(ptype)
 sfold = bfold+spt+'/'
 spec_fold = '/Users/kelle/Dropbox/Data/nir_spectra_low/'
 dfold = sfold+spt+'s/'
 ;slist = dfold+spt+'s_in.txt'
-slist = bfold+'spectra_in.txt'
+
+
+if keyword_set(young) then slist = bfold+'optNIR_LowG_Opt.txt' else slist = bfold+'spectra_in.txt'
+
 txt_fold = bfold+'NIRSpecFigures/' ;sfold+'output_'+spt+'/'
 ofold = bfold
 temp_fold = bfold+'templates/'
@@ -186,7 +190,7 @@ band = ['J','H','K']
 if (file_search(strfile) eq '' or keyword_set(reset)) then begin
 	MESSAGE,'re-selecting spectra',/info
 	
-	READCOL,slist,sfiles_all,stypes,format='AI',DELIM = string(9b) 
+	READCOL,slist,sfiles_all,stypes,format='AI',DELIM = string(9b), comment='#'
 	MESSAGE,'using spectra listed in ' + slist,/info
 	
 	sfiles=sfiles_all[where(stypes eq type+10,cnt_files)]
@@ -334,8 +338,8 @@ while loop_stop eq 0 do begin
 		endif 
 		
 		if keyword_set(ps) and mmm eq 0 then begin
-			device, /encapsulated, ysize=24, xsize=18, filename=ofold+fbase+'_v'+strtrim(string(ptype+1),2)+'.eps', /portrait, bits_per_pixel=8, /color
-			print, 'Creating: '+ ofold+fbase+'_v'+strtrim(string(ptype+1),2)+'.eps'
+			device, /encapsulated, ysize=24, xsize=18, filename=ofold+fbase+'_p'+strtrim(string(ptype),2)+'.eps', /portrait, bits_per_pixel=8, /color
+			print, 'Creating: '+ ofold+fbase+'_p'+strtrim(string(ptype),2)+'.eps'
 			;device, /encapsulated, ysize=18, xsize=24, filename=ofold+fbase+'_v'+strtrim(string(ptype+1),2)+'_chi2.eps', /portrait, bits_per_pixel=8, /color
 			!p.multi=[0,3,3]
 			!p.thick=2
@@ -436,7 +440,7 @@ while loop_stop eq 0 do begin
 		    	ptype eq 1: begin ;only plot objects selected & the std dev
 		     	   if (cnt_keep gt 0) then for j=0,cnt_keep-1 do oplot, str.lam[w], str.flx(w,i_keep[j])/norm_facts[i_keep[j]], color=color_kept, thick=1
 				   ;polyfill the standard dev of the template
-  		   		   polyfill, [str.lam[w],reverse(str.lam[w])], [template+sd,reverse(template-sd)], color=colorfill_sdev, /fill
+  		   		   ;polyfill, [str.lam[w],reverse(str.lam[w])], [template+sd,reverse(template-sd)], color=colorfill_sdev, /fill
 		    	end
 		    	else: begin ;plot everything
   		   		   if (cnt_keep gt 0) then for j=0,cnt_keep-1 do oplot, str.lam[w], str.flx(w,i_keep[j])/norm_facts[i_keep[j]], color=color_kept, thick=1
@@ -493,6 +497,9 @@ i_loop = indgen(nloops)
  rstr = spt + '!C'+'!9s!3 = '+strtrim(string(sigma),2)+' N_kept = '+strtrim(string(cnt_keep),2)+'!C'+ 'N_reject = '+strtrim(string(cnt_rejects),2)+'!C'+'N_spec = '+strtrim(string(cnt_keep+cnt_rejects),2)
 
  if i_rejects[0] eq -1 then print, 'no band-by-band rejects'; else print, "band-by-band rejects:", str.names(wnselect)
+ 
+ message, 'wrote:' + txt_fold+fbase+'_band_rejects.txt',/info
+ message, 'wrote:' + txt_fold+fbase+'_band_keepers.txt',/info
 
  print, " number selected = ", cnt_keep
  print, " number rejected = ", cnt_rejects
@@ -529,7 +536,7 @@ template_full = kellel_template( str.lam(w), str.flx(w,*), str.flx_unc(w,*), nor
     ptype eq 1: begin ;only plot keepers and the std dev
 		if (cnt_keep gt 0) then for j=0,cnt_keep-1 do oplot, str.lam[w], str.flx(w,i_keep[j])/norm_facts[i_keep[j]], color=color_kept, thick=2
 	    ;polyfill, [str.lam[w],reverse(str.lam[w])], [maxs_templ,reverse(mins_templ)], color=colorfill_minmax, /fill
-	    polyfill, [str.lam[w],reverse(str.lam[w])], [template_full+sd,reverse(template_full-sd)], color=colorfill_sdev, /fill
+	    ;polyfill, [str.lam[w],reverse(str.lam[w])], [template_full+sd,reverse(template_full-sd)], color=colorfill_sdev, /fill
 		
     end
     else: begin ;only plot rejects
@@ -554,7 +561,7 @@ template_full = kellel_template( str.lam(w), str.flx(w,*), str.flx_unc(w,*), nor
 if ~keyword_set(ps) then begin 
 	window,3
 endif else if keyword_set(ps) then begin
-	device, /encapsulated, ysize=18, xsize=24, filename=ofold+fbase+'_v'+strtrim(string(ptype+1),2)+'_chi2avg.eps', /portrait, bits_per_pixel=8, /color
+	device, /encapsulated, ysize=18, xsize=24, filename=ofold+fbase+'_chi2avg.eps', /portrait, bits_per_pixel=8, /color
 ENDIF
 !p.multi=0
 plot, i_loop, i_loop, yr =[0.5,1.1], xr=[-1,nloops+1],/nodata,xstyle=1
