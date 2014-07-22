@@ -163,14 +163,17 @@ if (keyword_set(batch)) then begin
    ;endfor
   endfor
   goto, FINISH
- endif
+endif
  
 ; -----------------------------
 ; EXAMINE VARIANCE IN SPECTRA, ATTEMPT TO DEFINE "NORMAL"
 ; -----------------------------
 
 spt = 'L'+strmid(strtrim(string(type),2),0,1)
-if keyword_set(young) then spt = spt+'lg'
+if keyword_set(young) and type mod 1 ne 0 then spt = spt+'b'
+if keyword_set(young) and type mod 1 eq 0 then spt = spt+'g'
+
+
 print, spt, '  chi^2: ',strn(sigma)
 print, 'p(lot) type: ', strn(ptype)
 sfold = bfold+spt+'/'
@@ -179,22 +182,24 @@ spec_fold_opt = '/Users/kelle/Dropbox/Data/optical_spectra/'
 dfold = sfold+spt+'s/'
 ;slist = dfold+spt+'s_in.txt'
 
-if keyword_set(young) then slist = bfold+'optNIR_LowG_Opt.txt' else slist = bfold+'spectra_in.txt'
-
 txt_fold = bfold+'NIRSpecFigures/data/' ;sfold+'output_'+spt+'/'
 ofold = bfold
 temp_fold = bfold+'templates/'
 strfile = bfold+'save_files/spectra'+spt+'.dat'
 band = ['J','H','K']
 
+;READ IN SPECTRA, MAKE DATA STRUCTURE, or READ FROM SAVE FILE
 if (file_search(strfile) eq '' or keyword_set(reset)) then begin
 	MESSAGE,'re-selecting spectra',/info
 	
-	READCOL,slist,sfiles_all_opt,sfiles_all,stypes,format='A,A,I',DELIM = string(9b),comment='#'
+	if keyword_set(young) then slist = bfold+'spectra_in_lowg.txt' else slist = bfold+'spectra_in.txt'
+	
+	READCOL,slist,sfiles_all_opt,sfiles_all,stypes,format='A,A,D',DELIM = string(9b),comment='#'
 	MESSAGE,'using spectra listed in ' + slist,/info
 	
-	sfiles=sfiles_all[where(stypes eq type+10,cnt_files)]
-	sfiles_opt=sfiles_all_opt[where(stypes eq type+10)]
+	sfiles=sfiles_all[where(stypes eq type+10.,cnt_files)]
+	print, type
+	sfiles_opt=sfiles_all_opt[where(stypes eq type+10.)]
 	Message, 'reading in '+ strn(cnt_files) +' files where type=' +strn(type+10),/info
 	
 	;====================
@@ -228,7 +233,8 @@ if (file_search(strfile) eq '' or keyword_set(reset)) then begin
 	 flx(*,ifile) = interpol(fits(*,1),fits(*,0),lam)
 	 flx_unc(*,ifile) = interpol(fits[*,2],fits[*,0],lam)
 	 if sfiles_opt[ifile] ne 'include' then $ 
-	 	flx_opt[*,ifile] = smooth(interpol(fits_opt[1,*],fits_opt[0,*],lam_opt),5) else $
+	 	;flx_opt[*,ifile] = smooth(interpol(fits_opt[1,*],fits_opt[0,*],lam_opt),5) else $
+		flx_opt[*,ifile] = interpol(fits_opt[1,*],fits_opt[0,*],lam_opt) else $
 		flx_opt[*,ifile] = fits_opt
 	 ;print,ifile,flx_opt[0:4,ifile]
 	endfor
@@ -279,7 +285,6 @@ make_plot2=0
 if keyword_set(ps) then set_plot,'ps'
 
 while loop_stop eq 0 do begin
-;for iloop=0,nloops-1 do begin
 
 	;Loop over bands
 	;Reject any spectrum that has chi^2 > 2 compared to template
@@ -330,20 +335,7 @@ while loop_stop eq 0 do begin
 		for i=0,cnt_rejects_j-1 do ii_rejects_j[i] = where(i_rejects eq i_rejects_j[i])
 		for i=0,cnt_rejects_h-1 do ii_rejects_h[i] = where(i_rejects eq i_rejects_h[i])
 		for i=0,cnt_rejects_k-1 do ii_rejects_k[i] = where(i_rejects eq i_rejects_k[i])
-		;=======
-		;i_keep_j = 
-		;i_keep_h = 
-		;i_keep_k = 
-		
-		;if cnt_keep_j ge 1 then ii_keep_j = intarr(cnt_keep_j)
-		;if cnt_keep_h ge 1 then ii_keep_h = intarr(cnt_keep_h)
-		;if cnt_keep_k ge 1 then ii_keep_k = intarr(cnt_keep_k)
-		;for i=0,cnt_keep_j-1 do ii_keep_j[i] = where(i_keep eq i_keep_j[i])
-		;for i=0,cnt_keep_h-1 do ii_keep_h[i] = where(i_keep eq i_keep_h[i])
-		;for i=0,cnt_keep_k-1 do ii_keep_k[i] = where(i_keep eq i_keep_k[i])	 
-	 
-	 	if mmm eq 2 then print,iloop,cnt_rejects_j,cnt_rejects_h,cnt_rejects_k
-	 
+
 		if (cnt_keep eq 0) then message, 'Warning, rejected all sources!'
 		
 		;print, 'loop & mean chi^2 = ' + strn(iloop) + ' ' + strn(mean(chi2[i_keep]))
@@ -367,12 +359,13 @@ while loop_stop eq 0 do begin
 		
 		if keyword_set(ps) and mmm eq 0 then begin
 			device, /encapsulated, ysize=24, xsize=18, filename=ofold+fbase+'_p'+strtrim(string(ptype),2)+'.eps', /portrait, bits_per_pixel=8, /color
-			print, 'Creating: '+ ofold+fbase+'_p'+strtrim(string(ptype),2)+'.eps'
+			;if loop_stop eq 1 then message, 'Creating: '+ ofold+fbase+'_p'+strtrim(string(ptype),2)+'.eps',/info
 			;device, /encapsulated, ysize=18, xsize=24, filename=ofold+fbase+'_v'+strtrim(string(ptype+1),2)+'_chi2.eps', /portrait, bits_per_pixel=8, /color
 			!p.multi=[0,3,3]
 			!p.thick=2
 			make_plot2=1
 		endif
+
 		if keyword_set(ps) and mmm ge 1 then begin
 			!p.multi=[9-mmm,3,3]
 			make_plot2=1
@@ -447,7 +440,7 @@ while loop_stop eq 0 do begin
 		   ;set up label locations
 		   name_loc_x=0.14
 		   name_loc_offset_x=0.3
-		   name_loc_y=0.45
+		   name_loc_y=0.43
 		   
 		   case 1 of 
 		    	ptype eq 0: begin
@@ -459,6 +452,7 @@ while loop_stop eq 0 do begin
 				   ;polyfill the standard dev
   		   		   polyfill, [str.lam[w],reverse(str.lam[w])], [template+sd,reverse(template-sd)], color=colorfill_sdev, /fill
 				   ;print out the names of rejected objects
+				   xyouts, name_loc_x, name_loc_y+0.02,'Rejects:' ,/normal
 				   	case mmm of
 					   	0: if (cnt_rejects_j gt 0) then for j=0,cnt_rejects_j-1 do xyouts, name_loc_x+name_loc_offset_x*(mmm), name_loc_y-j*0.02, str.names[i_rejects_j[j]],color=color_rejected[ii_rejects_j[j]],size=0.8,/normal
 						1: if (cnt_rejects_h gt 0) then for j=0,cnt_rejects_h-1 do xyouts, name_loc_x+name_loc_offset_x*(mmm), name_loc_y-j*0.02, str.names[i_rejects_h[j]],color=color_rejected[ii_rejects_h[j]],size=0.8,/normal
@@ -469,7 +463,7 @@ while loop_stop eq 0 do begin
 		     	   if (cnt_keep gt 0) then for j=0,cnt_keep-1 do oplot, str.lam[w], str.flx(w,i_keep[j])/norm_facts[i_keep[j]], color=color_rejected[j], thick=1
 				   ;polyfill the standard dev of the template
   		   		   ;polyfill, [str.lam[w],reverse(str.lam[w])], [template+sd,reverse(template-sd)], color=colorfill_sdev, /fill
-				   
+				   xyouts, name_loc_x, name_loc_y+0.02,'Keeps:'  ,/normal
 				case mmm of
 				   	0: if (cnt_keep gt 0) then for j=0,cnt_keep-1 do xyouts, name_loc_x+0.33*(mmm), name_loc_y-j*0.02, str.names[i_keep[j]],color=color_rejected[j],size=0.8,/normal
 					1: if (cnt_keep gt 0) then for j=0,cnt_keep-1 do xyouts, name_loc_x+0.33*(mmm), name_loc_y-j*0.02, str.names[i_keep[j]],color=color_rejected[j],size=0.8,/normal
@@ -480,6 +474,7 @@ while loop_stop eq 0 do begin
 		    	else: begin ;plot everything
   		   		   if (cnt_keep gt 0) then for j=0,cnt_keep-1 do oplot, str.lam[w], str.flx(w,i_keep[j])/norm_facts[i_keep[j]], color=color_kept, thick=1
 				   if (cnt_rejects gt 0) then for j=0,cnt_rejects-1 do oplot, str.lam(w), str.flx(w,i_rejects[j])/norm_facts(i_rejects[j]), color=color_rejected[j], thick=1
+				   xyouts, name_loc_x, name_loc_y+0.02,'Rejects:'  ,/normal
 					case mmm of
 					   	0: if (cnt_rejects_j gt 0) then for j=0,cnt_rejects_j-1 do xyouts, name_loc_x+0.33*(mmm), name_loc_y-j*0.02, str.names[i_rejects_j[j]],color=color_rejected[ii_rejects_j[j]],size=0.8,/normal
 						1: if (cnt_rejects_h gt 0) then for j=0,cnt_rejects_h-1 do xyouts, name_loc_x+0.33*(mmm), name_loc_y-j*0.02, str.names[i_rejects_h[j]],color=color_rejected[ii_rejects_h[j]],size=0.8,/normal
@@ -490,14 +485,15 @@ while loop_stop eq 0 do begin
 		   oplot, str.lam(w), template, thick=2
    		endif ;end make_plot
 		
-	 	;if loop_stop eq 1 then begin
+	 	if loop_stop eq 1 then begin
 		   ; save template
 		   dat = [[str.lam(w)],[template],[sd],[mins_templ],[maxs_templ]]
 		   fxhmake,hdr,dat
 		   output_fits = temp_fold+spt+'_template_'+band(mmm)+'.fits'
 		   writefits, output_fits , dat, hdr
 		   message, 'wrote' + output_fits, /info 
- 	  	;endif
+		   
+ 	  	endif
 
 	endfor ;end loop over 3 (JHK) bands, mmm
 
@@ -508,8 +504,6 @@ endwhile
 
 nloops=iloop
 i_loop = indgen(nloops)
-
-
 
 ;WRITE TXT FILES
  tb='	'
@@ -535,6 +529,7 @@ i_loop = indgen(nloops)
  
  message, 'wrote:' + txt_fold+fbase+'_band_rejects.txt',/info
  message, 'wrote:' + txt_fold+fbase+'_band_keepers.txt',/info
+ if keyword_set(ps) then message, 'Made: '+ ofold+fbase+'_p'+strtrim(string(ptype),2)+'.eps',/info
 
  print, " number selected = ", cnt_keep
  print, " number rejected = ", cnt_rejects
@@ -596,7 +591,14 @@ template_full = kellel_template( str.lam(w), str.flx(w,*), str.flx_unc(w,*), nor
 ;===============
 ;plot the optical spectra
 ;===============
-if ~keyword_set(ps) then window, 4
+if ~keyword_set(ps) then begin
+	window, 4
+	window, 5
+	window, 6
+endif
+;endif else if keyword_set(ps) then begin;
+;	device, /encapsulated, ysize=18, xsize=24, filename=ofold+fbase+'_opt.eps', /portrait, bits_per_pixel=8, /color
+;ENDIF
 !p.multi=0
 
 ;stop
@@ -609,24 +611,42 @@ if ~keyword_set(ps) then window, 4
 ;for i = 0,nspec-1 do flux_maxs_opt[i] = MAX( str.flx_opt[w,i] / norm_facts[i] )
 
  ;yra = [MIN(flux_mins),MAX(flux_maxs) ] 
-  plot, str.lam_opt, str.flx_opt[*,0], xr=[6500,9000],/xsty, /ysty, xtitle='!3Wavelength ()', ytitle='Normalized Flux', charsize=2,/nodata; xmargin=[8,-50]
+  
 
   ;stop
   
   name_loc_x=0.2
   name_loc_y=0.8
+  name_loc_x2=0.5
 
-  case 1 of 
-   ptype eq 0: begin
-   	if (cnt_rejects gt 0) then begin
- 		for j=0,cnt_rejects-1 do begin 
-	 		oplot, str.lam_opt, str.flx_opt(*,i_rejects[j]), color=color_rejected[j], thick=1
+  ;case 1 of 
+   ;ptype eq 0: begin
+	   if keyword_set(ps) then begin 
+		   device, /encapsulated, ysize=18, xsize=24, filename=ofold+fbase+'_opt_all.eps', /portrait, bits_per_pixel=8, /color
+		   message, 'Creating: '+ ofold+fbase+'_opt_all.eps',/info
+	   endif else wset,4
+	   
+	   plot, str.lam_opt, str.flx_opt[*,0], xr=[6500,9000],/xsty, /ysty, xtitle='!3Wavelength ()', ytitle='Normalized Flux', charsize=2,/nodata; xmargin=[8,-50]
+	   if (cnt_rejects gt 0) then begin
+ 		for j=0,cnt_keep-1 do begin		
+			oplot, str.lam_opt, str.flx_opt(*,i_keep[j]), color=color_kept, thick=1
+			xyouts, name_loc_x2, name_loc_y+0.02, 'KEEPERS:',/normal
+			xyouts, name_loc_x2, name_loc_y-j*0.02, str.files_opt[i_keep[j]],color=color_kept,size=0.8,/normal
+		endfor
+		for j=0,cnt_rejects-1 do begin 
+			oplot, str.lam_opt, str.flx_opt(*,i_rejects[j]), color=color_rejected[j], thick=1
 			xyouts, name_loc_x,name_loc_y+0.02,'REJECTS:',/normal
 			xyouts, name_loc_x, name_loc_y-j*0.02, str.files_opt[i_rejects[j]],color=color_rejected[j],size=0.8,/normal
 		endfor
 	endif	
-   end
-   ptype eq 1: begin ;only plot keepers and the std dev
+  ; end
+   ;ptype eq 1: begin ;only plot keepers and the std dev
+	   if keyword_set(ps) then begin
+		   device, /encapsulated, ysize=18, xsize=24, filename=ofold+fbase+'_opt_keeps.eps', /portrait, bits_per_pixel=8, /color
+		   message, 'Creating: '+ ofold+fbase+'_opt_keeps.eps',/info
+	   endif else wset,5
+	  
+	   plot, str.lam_opt, str.flx_opt[*,0], xr=[6500,9000],/xsty, /ysty, xtitle='!3Wavelength ()', ytitle='Normalized Flux', charsize=2,/nodata; xmargin=[8,-50]
 	if (cnt_keep gt 0) then begin
 		for j=0,cnt_keep-1 do begin			
 			oplot, str.lam_opt, str.flx_opt(*,i_keep[j]), color=color_rejected[j], thick=1	
@@ -635,8 +655,14 @@ if ~keyword_set(ps) then window, 4
 ;			stop
 		endfor
 	endif
-   end
-   else: begin ;only plot rejects
+  ; end
+   ;else: begin ;only plot rejects
+	   if keyword_set(ps) then begin
+		   device, /encapsulated, ysize=18, xsize=24, filename=ofold+fbase+'_opt_rejects.eps', /portrait, bits_per_pixel=8, /color
+		   message, 'Creating: '+ ofold+fbase+'_opt_rejects.eps',/info
+	   endif else wset,6
+	   
+	   plot, str.lam_opt, str.flx_opt[*,0], xr=[6500,9000],/xsty, /ysty, xtitle='!3Wavelength ()', ytitle='Normalized Flux', charsize=2,/nodata; xmargin=[8,-50]
 	if (cnt_rejects gt 0) then begin
 		for j=0,cnt_rejects-1 do begin
 			oplot, str.lam_opt, str.flx_opt(*,i_rejects[j]), color=color_rejected[j], thick=1
@@ -644,8 +670,8 @@ if ~keyword_set(ps) then window, 4
 			xyouts, name_loc_x, name_loc_y-j*0.02, str.files_opt[i_rejects[j]],color=color_rejected[j],size=0.8,/normal
 		endfor
 	endif
-   end
-  endcase
+  ; end
+  ;endcase
    
 xyouts, 2.35, yra(1)-0.15*(yra(1)-yra(0)), rstr , align=1, charsize=1.3
 
