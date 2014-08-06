@@ -1,0 +1,45 @@
+#L0 Beta
+U20430_2mass1154m3400_davy.fits	spex_prism_1154-3400_080109.fits	10.5
+U40021_roque25_davy.fits	U40021_Roque25_dagny.fits	10.5
+u20638.fits	spex_prism_1552+2948_080730.fits	10.5
+U20172_0357-4417_lris.fits	spex_prism_0357-4417_070916.fits	10.5
+#L0 gamma
+2MASS1711+2326_tell.fits	spex_prism_1711+2326_080713.fits	10
+U20026_0032-4405.fits	spex_prism_0032-4405_U20026.fits	10
+U20098_0210-3015.fits	U20098.fits	10
+U12120.fits	j2213-2136prismtc1.fits	10
+U40106_0406-3812.fits	U40106_0406-3812.fits	10
+U20157.fits	spex_prism_0323-4631_U20157.fits	10
+U20076.fits	spex_prism_0141-4633_040905.fits	10
+U10141_0241-0326.fits	spex_prism_U10141_060821.fits	10
+U20993_2315+0617.fits	spex_prism_2315+0617_U20993.fits	10
+#L1 beta
+u20373_n3.fits	u20373_050323.fits	11.5
+u20114.fits	U20114_0227-1624.fits	11.5
+#L1 gamma
+U10381_0518-27.fits	U10381_0518-2756.fits	11
+U10074_0117-3403.fits	spex_prism_U10074_060821.fits	11
+U20037.fits	U20037_2M0045+1634_adam.fits	11
+#L2 gamma
+U10397_0536-19.fits	U10397.fits	12
+U20048_0055+0134.fits	U20048.fits	12
+#L3 and 3.5 gamma
+U40004_2208+2921_dagny.fits	spex_prism_2208+2921_U40004.fits	13
+2MASS1726+1538_tell.fits	spex_prism_1726+1538_080713.fits	13
+2MASS1551+0941_tell.fits	spex_prism_U20636_1551+0941_080713.fits	13
+#L3 beta
+U40039_g196-3b_all_ascii_davy.fits	spex_prism_G196-3B_U40039.fits	13.5
+#L4 gamma
+2MASS1538-1953_tell.fits	U20622.fits	14
+U12113_lris_170799.fits	spex_prism_2206-4217_080714.fits	14
+U20198.fits	U20198_2M0501-0010_dagny.fits	14
+U40005_2249+0044.fits	U40005_2249+0044_katelyn.fits	14
+U12096_2154-1055.fits	U12096.fits	14
+2MASS1615+4953_tell_3600s.fits	u11538_050323.fits	14
+#L4 beta
+U20179.fits	U20179.fits	14.5
+#L5
+U10372.fits	U10372_0512-2949.fits	15
+U10184.fits	spex_prism_0326-2102_U10184.fits	15
+#U20171.fits	U20171_0355+1133.fits	15
+2MASS2002-0521_tell.fits	spex_prism_2002-0521_080908.fits	15

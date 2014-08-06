@@ -1,7 +1,9 @@
 ; -----------------------------
 ; SEPARATE NORMALIZATION SCRIPT
 ; -----------------------------
-function kellel_normalize, lam, flx, norm_fact=norm_fact, rng=rng
+function kellel_normalize, lam, flx, norm_fact=norm_fact, rng=rng, j_norm=j_norm
+
+	if keyword_set(j_norm) then rng=[1.27,1.29]
 
 lamn = lam
 flxn = flx 
@@ -25,7 +27,7 @@ end
 ; -----------------------------
 ; SCRIPT TO CREATE TEMPLATES
 ; -----------------------------
-function kellel_template, lam, flxs, flx_uncs, norm_facts=norm_facts, flags_in=flags_in, flags_out=flags_out, flags_one=flags_one,sigma=sigma, sd=sd, chi2=chi2, maxs_templ=maxs_templ, mins_templ=mins_templ, no_renorm=no_renorm
+function kellel_template, lam, flxs, flx_uncs, norm_facts=norm_facts, flags_in=flags_in, flags_out=flags_out, flags_one=flags_one,sigma=sigma, sd=sd, chi2=chi2, maxs_templ=maxs_templ, mins_templ=mins_templ, no_renorm=no_renorm, j_norm=j_norm
 
 ;JUST MAKE THE TEMPLATE AND FIND OUTLIERS
 
@@ -49,7 +51,7 @@ if (cntselect eq 0) then message, 'No spectra available for creating template'
 ; first normalization of each spectrum
 
 for j=0,nspec-1 do begin
-  flxns[*,j] = kellel_normalize(lam, flxs[*,j], norm_fact=norm_fact)
+  flxns[*,j] = kellel_normalize(lam, flxs[*,j], norm_fact=norm_fact,j_norm=j_norm)
   flxn_uncs[*,j] = flx_uncs[*,j] / norm_fact
   norm_facts[j] = norm_fact
   ;if j eq 0 then plot, lam, flxns(*,j) else oplot, lam, flxns(*,j)
@@ -61,7 +63,9 @@ mc_meancomb2, flxns[*,wselect], template_first, datavar=flxn_uncs[*,wselect]
 ; repeat normalization against template
 if ~keyword_set(no_renorm) then begin
 	for j=0,nspec-1 do begin
-		norm_facts[j] = median( flxs[*,j] / template_first );
+		w_jnorm=where(lam ge 1.27 and lam le 1.29)
+		if keyword_set(j_norm) then norm_facts[j] = median( flxs[w_jnorm,j] / template_first ) else $
+			norm_facts[j] = median( flxs[*,j] / template_first );
 		flxns[*,j] = flxs[*,j] / norm_facts[j]
 		flxn_uncs[*,j] = flx_uncs[*,j] / norm_facts[j]
 		;print, 'RENORMIALIZED TO TEMPLATE'
@@ -299,7 +303,7 @@ while loop_stop eq 0 do begin
 		;print, iloop,no_renorm
 		
 		;takes flags_in and modifies to reflect new rejects
-		template = kellel_template(str.lam(w), str.flx(w,*), str.flx_unc(w,*), norm_facts=norm_facts, flags_in=flags_in, flags_out=flags_out, flags_one=flags_one,sd=sd, sigma=sigma, chi2=chi2, mins_templ=mins_templ, maxs_templ=maxs_templ,no_renorm=no_renorm)
+		template = kellel_template(str.lam[w], str.flx[w,*], str.flx_unc[w,*], norm_facts=norm_facts, flags_in=flags_in, flags_out=flags_out, flags_one=flags_one,sd=sd, sigma=sigma, chi2=chi2, mins_templ=mins_templ, maxs_templ=maxs_templ,no_renorm=no_renorm)
 		
 		i_keep = where(flags_out eq 0,cnt_keep)
 		i_rejects = where(flags_out ge 1,cnt_rejects)
@@ -537,43 +541,68 @@ i_loop = indgen(nloops)
 ;=================== 
 ;plot the entire range
 ;=================== 
-w = where(str.lam ge 0.9 and str.lam le 2.4,cnt)
-template_full = kellel_template( str.lam(w), str.flx(w,*), str.flx_unc(w,*), norm_facts=norm_facts,flags_in=flags_in, flags_out=flags_out, sd=sd, sigma=sigma, chi2=chi2,mins_templ=mins_templ,maxs_templ=maxs_templ,no_renorm=no_re_norm)
-   
+w = where(str.lam ge 0.9 and str.lam le 2.4,nlam)
+;template_full = kellel_template( str.lam(w), str.flx(w,*), str.flx_unc(w,*), norm_facts=norm_facts,flags_in=flags_in, flags_out=flags_out, sd=sd, sigma=sigma, chi2=chi2,mins_templ=mins_templ,maxs_templ=maxs_templ,no_renorm=no_re_norm,/j_norm)
+w_jnorm=where(str.lam ge 1.28-0.03 and str.lam le 1.28+0.03)
+
+flux_mins = fltarr(nspec) & flux_maxs=fltarr(nspec)
+;for i = 0,nspec-1 do flux_mins[i] = MIN( str.flx[w,i] / norm_facts[i] ) 
+;for i = 0,nspec-1 do flux_maxs[i] = MAX( str.flx[w,i] / norm_facts[i] )
+full_flxn=fltarr(n_elements(w),nspec)
+full_flxn_unc=fltarr(n_elements(w),nspec)
+sd = fltarr(nlam)
+
+for i=0,nspec-1 do begin
+	norm_facts[i] = mean(str.flx(w_jnorm,i))
+	flux_mins[i] = MIN( str.flx[w,i] / norm_facts[i] ) 
+	flux_maxs[i] = MAX( str.flx[w,i] / norm_facts[i] )
+	full_flxn[*,i] = str.flx[w,i]/norm_facts[i]
+	full_flxn_unc[*,i] = str.flx_unc[w,i]/norm_facts[i]
+endfor
+
+full_flxn_keep = full_flxn[*,i_keep]
+full_flxn_unc_keep = full_flxn_unc[*,i_keep]
+mins_full_templ = MIN(full_flxn_keep,dim=2)
+maxs_full_templ = MAX(full_flxn_keep,dim=2)
+for j = 0, nlam-1 do sd[j] = stddev(full_flxn_keep[j,*])
+
+mc_meancomb2, full_flxn_keep, template_full, datavar=full_flx_unc_keep
+
    ;SET UP THE PLOTS
    if ~keyword_set(ps) then wset,1
    	!p.multi=[3,3,3]
    	;find the minimum and max to setup plot
-	flux_mins = fltarr(nspec) & flux_maxs=fltarr(nspec)
-	for i = 0,nspec-1 do flux_mins[i] = MIN( str.flx[w,i] / norm_facts[i] ) 
-	for i = 0,nspec-1 do flux_maxs[i] = MAX( str.flx[w,i] / norm_facts[i] )
 	
    yra = [MIN(flux_mins),MAX(flux_maxs) ] 
-   plot, str.lam(w), template_full, /xsty, yra=yra,/ysty, xtitle='!3Wavelength (!9m!3m)', ytitle='Normalized Flux', charsize=2, xmargin=[8,-50]
+   ;plot, str.lam(w), template_full, /xsty, yra=yra,/ysty, xtitle='!3Wavelength (!9m!3m)', ytitle='Normalized Flux', charsize=2, xmargin=[8,-50]
+    plot, str.lam(w), str.flx[w,0], /xsty, yra=yra,/ysty, xtitle='!3Wavelength (!9m!3m)', ytitle='Normalized Flux', charsize=2, xmargin=[8,-50], /nodata
  
    case 1 of 
     ptype eq 0: begin
     	if (cnt_rejects gt 0) then begin
 	 		for j=0,cnt_rejects-1 do begin 
-		 		oplot, str.lam[w], str.flx(w,i_rejects[j])/norm_facts[i_rejects[j]], color=color_rejected[j], thick=1
+			    polyfill, [str.lam[w],reverse(str.lam[w])], [maxs_full_templ,reverse(mins_full_templ)], color=colorfill_minmax, /fill
+			    polyfill, [str.lam[w],reverse(str.lam[w])], [template_full+sd,reverse(template_full-sd)], color=colorfill_sdev, /fill
+				oplot, str.lam[w], str.flx(w,i_rejects[j])/norm_facts[i_rejects[j]], color=color_rejected[j], thick=1
 				;xyouts, 0.95, yra(1)-0.15*j/2.5*(yra(1)-yra(0)), str.names(wnselect(j)),color=color_rejected[j],size=0.8
 			endfor
 		endif
-	    polyfill, [str.lam[w],reverse(str.lam[w])], [maxs_templ,reverse(mins_templ)], color=colorfill_minmax, /fill
-	    polyfill, [str.lam[w],reverse(str.lam[w])], [template_full+sd,reverse(template_full-sd)], color=colorfill_sdev, /fill
-		
-    end
-    ptype eq 1: begin ;only plot keepers and the std dev
-		if (cnt_keep gt 0) then for j=0,cnt_keep-1 do oplot, str.lam[w], str.flx(w,i_keep[j])/norm_facts[i_keep[j]], color=color_rejected[j], thick=1
-		;if (cnt_keep gt 0) then for j=0,cnt_keep-1 do oplot, str.lam[w], str.flx(w,i_keep[j])/norm_facts[i_keep[j]], color=color_kept, thick=2
 	    ;polyfill, [str.lam[w],reverse(str.lam[w])], [maxs_templ,reverse(mins_templ)], color=colorfill_minmax, /fill
 	    ;polyfill, [str.lam[w],reverse(str.lam[w])], [template_full+sd,reverse(template_full-sd)], color=colorfill_sdev, /fill
 		
     end
-    else: begin ;only plot rejects
+    ptype eq 1: begin ;only plot keepers 
+		if (cnt_keep gt 0) then for j=0,cnt_keep-1 do oplot, str.lam[w], str.flx(w,i_keep[j])/norm_facts[i_keep[j]], color=color_rejected[j], thick=1
+		;if (cnt_keep gt 0) then for j=0,cnt_keep-1 do oplot, str.lam[w], str.flx(w,i_keep[j])/norm_facts[i_keep[j]], color=color_kept, thick=2
+	    ;polyfill, [str.lam[w],reverse(str.lam[w])], [maxs_full_templ,reverse(mins_full_templ)], color=colorfill_minmax, /fill
+	    ;polyfill, [str.lam[w],reverse(str.lam[w])], [template_full+sd,reverse(template_full-sd)], color=colorfill_sdev, /fill
+		
+    end
+    else: begin ;plot everything
+		if (cnt_keep gt 0) then for j=0,cnt_keep-1 do oplot, str.lam[w], str.flx(w,i_keep[j])/norm_facts[i_keep[j]], color=color_kept, thick=1
 		if (cnt_rejects gt 0) then for j=0,cnt_rejects-1 do oplot, str.lam[w], str.flx(w,i_rejects[j])/norm_facts[i_rejects[j]], color=color_rejected[j], thick=1
-	    polyfill, [str.lam[w],reverse(str.lam[w])], [maxs_templ,reverse(mins_templ)], color=colorfill_minmax, /fill
-	    polyfill, [str.lam[w],reverse(str.lam[w])], [template_full+sd,reverse(template_full-sd)], color=colorfill_sdev, /fill		
+	    ;polyfill, [str.lam[w],reverse(str.lam[w])], [maxs_templ,reverse(mins_templ)], color=colorfill_minmax, /fill
+	    ;polyfill, [str.lam[w],reverse(str.lam[w])], [template_full+sd,reverse(template_full-sd)], color=colorfill_sdev, /fill		
     end
    endcase
    
@@ -582,9 +611,9 @@ template_full = kellel_template( str.lam(w), str.flx(w,*), str.flx_unc(w,*), nor
  xyouts, 2.35, yra(1)-0.15*(yra(1)-yra(0)), rstr , align=1, charsize=1.3
 
 ; save template
-   dat = [[str.lam[w]],[template_full],[sd]]
-   fxhmake,hdr,dat
-   writefits, temp_fold+spt+'_template_FULL.fits', dat, hdr
+   ;dat = [[str.lam[w]],[template_full],[sd]]
+   ;fxhmake,hdr,dat
+   ;writefits, temp_fold+spt+'_template_FULL.fits', dat, hdr
   ;endif
 ;endfor
 
