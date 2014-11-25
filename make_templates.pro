@@ -174,6 +174,8 @@ endif
 ; -----------------------------
 
 spt = 'L'+strmid(strtrim(string(type),2),0,1)
+if type ne 8 then spt_p1 = 'L'+strmid(strtrim(string(type+1),2),0,1)
+if type ne 0 then spt_m1 = 'L'+strmid(strtrim(string(type-1),2),0,1)
 if keyword_set(young) and type mod 1 ne 0 then spt = spt+'b'
 if keyword_set(young) and type mod 1 eq 0 then spt = spt+'g'
 
@@ -183,14 +185,25 @@ print, 'p(lot) type: ', strn(ptype)
 sfold = bfold+spt+'/'
 spec_fold = '/Users/kelle/Dropbox/Data/nir_spectra_low/'
 spec_fold_opt = '/Users/kelle/Dropbox/Data/optical_spectra/'
+stds_fold = '/Users/kelle/Dropbox/Data/nir_spectra_low/standards/'
 dfold = sfold+spt+'s/'
 ;slist = dfold+spt+'s_in.txt'
 
 txt_fold = bfold+'NIRSpecFigures/data/' ;sfold+'output_'+spt+'/'
 ofold = bfold
-temp_fold = bfold+'templates/'
+templ_fold = bfold+'templates_idl/'
 strfile = bfold+'save_files/spectra'+spt+'.dat'
 band = ['J','H','K']
+
+;Read in K10 NIR Spectral Standards for comparison
+std_file = file_search(stds_fold+spt+'*')
+if type ne 8 then std_file_p1 = file_search(stds_fold+spt_p1+'*') else std_file_p1='none'
+if type ne 0 then std_file_m1 = file_search(stds_fold+spt_m1+'*') else std_file_m1='none'
+Message, 'NIR spectral standards: ' + file_basename(std_file_m1) +', ' + file_basename(std_file) + ', ' +  file_basename(std_file_p1),/info
+norm_region=[0.87,1.39]
+std_spec = KREADSPEC(std_file,/norm, /nir, nregion=norm_region)
+if type ne 0 then std_spec_m1 = KREADSPEC(std_file_m1, /norm, /nir,nregion=norm_region)
+if type ne 8 then std_spec_p1 = KREADSPEC(std_file_p1, /norm, /nir,nregion=norm_region)
 
 ;READ IN SPECTRA, MAKE DATA STRUCTURE, or READ FROM SAVE FILE
 if (file_search(strfile) eq '' or keyword_set(reset)) then begin
@@ -463,7 +476,8 @@ while loop_stop eq 0 do begin
 						2: if (cnt_rejects_k gt 0) then for j=0,cnt_rejects_k-1 do xyouts, name_loc_x+name_loc_offset_x*(mmm), name_loc_y-j*0.02, str.names[i_rejects_k[j]],color=color_rejected[ii_rejects_k[j]],size=0.8,/normal
 					ENDCASE
 		    	end
-		    	ptype eq 1: begin ;only plot objects selected & the std dev
+		    	ptype eq 1: begin 
+					;only plot objects selected & the std dev
 		     	   if (cnt_keep gt 0) then for j=0,cnt_keep-1 do oplot, str.lam[w], str.flx(w,i_keep[j])/norm_facts[i_keep[j]], color=color_rejected[j], thick=1
 				   ;polyfill the standard dev of the template
   		   		   ;polyfill, [str.lam[w],reverse(str.lam[w])], [template+sd,reverse(template-sd)], color=colorfill_sdev, /fill
@@ -493,7 +507,7 @@ while loop_stop eq 0 do begin
 		   ; save template
 		   dat = [[str.lam(w)],[template],[sd],[mins_templ],[maxs_templ]]
 		   fxhmake,hdr,dat
-		   output_fits = temp_fold+spt+'_template_'+band(mmm)+'.fits'
+		   output_fits = templ_fold+spt+'_template_'+band(mmm)+'.fits'
 		   writefits, output_fits , dat, hdr
 		   message, 'wrote' + output_fits, /info 
 		   
@@ -569,15 +583,15 @@ for j = 0, nlam-1 do sd[j] = stddev(full_flxn_keep[j,*])
 mc_meancomb2, full_flxn_keep, template_full, datavar=full_flx_unc_keep
 
    ;SET UP THE PLOTS
-   if ~keyword_set(ps) then wset,1
-   	!p.multi=[3,3,3]
-   	;find the minimum and max to setup plot
-	
-   yra = [MIN(flux_mins),MAX(flux_maxs) ] 
-   ;plot, str.lam(w), template_full, /xsty, yra=yra,/ysty, xtitle='!3Wavelength (!9m!3m)', ytitle='Normalized Flux', charsize=2, xmargin=[8,-50]
-    plot, str.lam(w), str.flx[w,0], /xsty, yra=yra,/ysty, xtitle='!3Wavelength (!9m!3m)', ytitle='Normalized Flux', charsize=2, xmargin=[8,-50], /nodata
- 
-   case 1 of 
+if ~keyword_set(ps) then wset,1
+!p.multi=[3,3,3]
+
+;find the minimum and max to setup plot
+yra = [MIN(flux_mins),MAX(flux_maxs) ] 
+;plot, str.lam(w), template_full, /xsty, yra=yra,/ysty, xtitle='!3Wavelength (!9m!3m)', ytitle='Normalized Flux', charsize=2, xmargin=[8,-50]
+plot, str.lam(w), str.flx[w,0], /xsty, yra=yra,/ysty, xtitle='!3Wavelength (!9m!3m)', ytitle='Normalized Flux', charsize=2, xmargin=[8,-50], /nodata
+
+case 1 of 
     ptype eq 0: begin
     	if (cnt_rejects gt 0) then begin
 	 		for j=0,cnt_rejects-1 do begin 
@@ -604,18 +618,91 @@ mc_meancomb2, full_flxn_keep, template_full, datavar=full_flx_unc_keep
 	    ;polyfill, [str.lam[w],reverse(str.lam[w])], [maxs_templ,reverse(mins_templ)], color=colorfill_minmax, /fill
 	    ;polyfill, [str.lam[w],reverse(str.lam[w])], [template_full+sd,reverse(template_full-sd)], color=colorfill_sdev, /fill		
     end
-   endcase
+endcase
    
- oplot, str.lam[w], template_full, thick=3
+oplot, str.lam[w], template_full, thick=3
   
- xyouts, 2.35, yra(1)-0.15*(yra(1)-yra(0)), rstr , align=1, charsize=1.3
+xyouts, 2.35, yra(1)-0.15*(yra(1)-yra(0)), rstr , align=1, charsize=1.3
+ 
+if keyword_set(ps) then device, /close
 
-; save template
-   ;dat = [[str.lam[w]],[template_full],[sd]]
-   ;fxhmake,hdr,dat
-   ;writefits, temp_fold+spt+'_template_FULL.fits', dat, hdr
-  ;endif
-;endfor
+;===============
+;plot the K10 way
+;================
+w = where(str.lam ge 0.9 and str.lam le 2.4,nlam)
+;w_jnorm=where(str.lam ge 1.28-0.02 and str.lam le 1.28+0.02)
+w_jnorm=where(str.lam ge 0.87 and str.lam le 1.39)
+
+flux_mins = fltarr(nspec) & flux_maxs=fltarr(nspec)
+full_flxn=fltarr(n_elements(w),nspec)
+full_flxn_unc=fltarr(n_elements(w),nspec)
+sd = fltarr(nlam)
+
+for i=0,nspec-1 do begin
+	norm_facts[i] = mean(str.flx(w_jnorm,i))
+	flux_mins[i] = MIN( str.flx[w,i] / norm_facts[i] ) 
+	flux_maxs[i] = MAX( str.flx[w,i] / norm_facts[i] )
+	full_flxn[*,i] = str.flx[w,i]/norm_facts[i]
+	full_flxn_unc[*,i] = str.flx_unc[w,i]/norm_facts[i]
+endfor
+
+full_flxn_keep = full_flxn[*,i_keep]
+full_flxn_unc_keep = full_flxn_unc[*,i_keep]
+mins_full_templ = MIN(full_flxn_keep,dim=2)
+maxs_full_templ = MAX(full_flxn_keep,dim=2)
+for j = 0, nlam-1 do sd[j] = stddev(full_flxn_keep[j,*])
+
+;SET UP THE PLOTS
+if ~keyword_set(ps) then begin 
+	window,2
+endif else if keyword_set(ps) then begin
+	set_plot,'ps'
+	device, /encapsulated, ysize=18, xsize=24, filename=ofold+fbase+'_p'+strtrim(string(ptype),2)+'_K10.eps', /portrait, bits_per_pixel=8, /color
+ENDIF
+
+!p.multi=0
+
+;find the minimum and max to setup plot
+yra = [MIN(flux_mins),MAX(flux_maxs) ] 
+
+plot, str.lam(w), str.flx[w,0], /xsty, yra=yra,/ysty, xtitle='!3Wavelength (!9m!3m)', ytitle='Normalized Flux', charsize=2, xmargin=[8,-50], /nodata
+
+case 1 of 
+    ptype eq 0: begin
+    	if (cnt_rejects gt 0) then begin
+	 		for j=0,cnt_rejects-1 do begin 
+			    ;polyfill, [str.lam[w],reverse(str.lam[w])], [maxs_full_templ,reverse(mins_full_templ)], color=colorfill_minmax, /fill
+			    ;polyfill, [str.lam[w],reverse(str.lam[w])], [template_full+sd,reverse(template_full-sd)], color=colorfill_sdev, /fill
+				oplot, str.lam[w], str.flx(w,i_rejects[j])/norm_facts[i_rejects[j]], color=color_rejected[j], thick=1
+			endfor
+			oplot, std_spec[0,*],std_spec[1,*], thick=1
+			if type ne 0 then oplot, std_spec_m1[0,*],std_spec_m1[1,*], thick=2,linestyle=1
+			if type ne 8 then oplot, std_spec_p1[0,*],std_spec_p1[1,*], thick=2,linestyle=1
+		endif
+	end
+    ptype eq 1: begin ;only plot keepers 
+		if (cnt_keep gt 0) then for j=0,cnt_keep-1 do oplot, str.lam[w], str.flx(w,i_keep[j])/norm_facts[i_keep[j]], color=ltgray, thick=1
+		oplot, std_spec[0,*],std_spec[1,*], thick=4
+		if type ne 0 then oplot, std_spec_m1[0,*],std_spec_m1[1,*], thick=3,color = blue
+		if type ne 8 then oplot, std_spec_p1[0,*],std_spec_p1[1,*], thick=3, color=red
+				
+    end
+    else: begin ;plot everything
+		if (cnt_rejects gt 0) then for j=0,cnt_rejects-1 do oplot, str.lam[w], str.flx(w,i_rejects[j])/norm_facts[i_rejects[j]], color=ltgray, thick=1
+		if (cnt_keep gt 0) then for j=0,cnt_keep-1 do oplot, str.lam[w], str.flx(w,i_keep[j])/norm_facts[i_keep[j]], color=gray, thick=1
+		oplot, std_spec[0,*],std_spec[1,*], thick=4
+		if type ne 0 then oplot, std_spec_m1[0,*],std_spec_m1[1,*], thick=3,color = blue
+		if type ne 8 then oplot, std_spec_p1[0,*],std_spec_p1[1,*], thick=3,color = red
+    end
+endcase
+
+xyouts, 0.7,0.87,spt, charsize=1.5,/normal
+xyouts, 0.7,0.87-0.03,file_basename(std_file_m1), color=blue, /normal
+xyouts, 0.7,0.87-2*0.03,file_basename(std_file), /normal
+xyouts, 0.7,0.87-3*0.03,file_basename(std_file_p1),color=red, /normal
+
+
+if keyword_set(ps) then device, /close
 
 ;===============
 ;plot the optical spectra
@@ -725,6 +812,8 @@ if keyword_set(ps) then begin
 	device, /close
 	set_plot, 'x'
 endif
+
+
 
 FINISH: return
 end
