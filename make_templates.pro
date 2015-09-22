@@ -284,8 +284,6 @@ if (file_search(strfile) eq '' or keyword_set(reset)) then begin
 	 ;print,ifile,flx_opt[0:4,ifile]
 	endfor
 
-	stop
-
 	str = create_struct($
 	'files',sfiles,$
 	'files_opt',sfiles_opt,$
@@ -294,7 +292,7 @@ if (file_search(strfile) eq '' or keyword_set(reset)) then begin
 	'flx_unc',flx_unc,$
 	'lam_opt',lam_opt,$
 	'flx_opt',flx_opt,$
-	'names', strrep(strrep(sfiles,dfold,''),'.fits',''))	
+	'names', strrep(sfiles,'.fits',''))	
  	 
 	 save, str, file=strfile
 endif else begin
