@@ -174,19 +174,37 @@ endif
 ; -----------------------------
 
 spt = 'L'+strmid(strtrim(string(type),2),0,1)
-if type ne 8 then spt_p1 = 'L'+strmid(strtrim(string(type+1),2),0,1)
-if type ne 0 then spt_m1 = 'L'+strmid(strtrim(string(type-1),2),0,1)
+if type eq 0 then begin
+	spt_m2 = 'M8'
+	spt_m1 = 'M9'
+endif else if type eq 1 then begin
+	spt_m2 = 'M9'
+	spt_m1 = 'L0'
+endif else begin
+	spt_m1 = 'L'+strmid(strtrim(string(type-1),2),0,1)
+	spt_m2 = 'L'+strmid(strtrim(string(type-2),2),0,1)
+endelse
+
+if type eq 8 then begin
+	spt_p2 = 'T0'
+	spt_p1 = 'L9'
+endif else if type eq 7 then begin
+	spt_p2 = 'L9'
+	spt_p1 = 'L8'
+endif else begin
+	spt_p1 = 'L'+strmid(strtrim(string(type+1),2),0,1)
+	spt_p2 = 'L'+strmid(strtrim(string(type+2),2),0,1)
+endelse
+
 if keyword_set(young) and type mod 1 ne 0 then spt = spt+'b'
 if keyword_set(young) and type mod 1 eq 0 then spt = spt+'g'
 
 
-print, spt, '  chi^2: ',strn(sigma)
-print, 'p(lot) type: ', strn(ptype)
-sfold = bfold+spt+'/'
+;sfold = bfold+spt+'/'
 spec_fold = '/Users/kelle/Dropbox/Data/nir_spectra_low/'
 spec_fold_opt = '/Users/kelle/Dropbox/Data/optical_spectra/'
 stds_fold = '/Users/kelle/Dropbox/Data/nir_spectra_low/standards/'
-dfold = sfold+spt+'s/'
+;dfold = sfold+spt+'s/'
 ;slist = dfold+spt+'s_in.txt'
 
 txt_fold = bfold+'NIRSpecFigures/data/' ;sfold+'output_'+spt+'/'
@@ -197,13 +215,25 @@ band = ['J','H','K']
 
 ;Read in K10 NIR Spectral Standards for comparison
 std_file = file_search(stds_fold+spt+'*')
-if type ne 8 then std_file_p1 = file_search(stds_fold+spt_p1+'*') else std_file_p1='none'
-if type ne 0 then std_file_m1 = file_search(stds_fold+spt_m1+'*') else std_file_m1='none'
+std_file_m1 = file_search(stds_fold+spt_m1+'*')
+std_file_m2 = file_search(stds_fold+spt_m2+'*')
+std_file_p1 = file_search(stds_fold+spt_p1+'*')
+std_file_p2 = file_search(stds_fold+spt_p2+'*')
+
 Message, 'NIR spectral standards: ' + file_basename(std_file_m1) +', ' + file_basename(std_file) + ', ' +  file_basename(std_file_p1),/info
+;norm_region=[0.87,1.39]
+;norm_region=[1.28-0.01,1.28+0.01]
 norm_region=[0.87,1.39]
 std_spec = KREADSPEC(std_file,/norm, /nir, nregion=norm_region)
-if type ne 0 then std_spec_m1 = KREADSPEC(std_file_m1, /norm, /nir,nregion=norm_region)
-if type ne 8 then std_spec_p1 = KREADSPEC(std_file_p1, /norm, /nir,nregion=norm_region)
+std_spec_m1 = KREADSPEC(std_file_m1, /norm, /nir,nregion=norm_region)
+std_spec_m2 = KREADSPEC(std_file_m2, /norm, /nir,nregion=norm_region)
+std_spec_p1 = KREADSPEC(std_file_p1, /norm, /nir,nregion=norm_region)
+std_spec_p2 = KREADSPEC(std_file_p2, /norm, /nir,nregion=norm_region)
+
+; if keyword_set(young) and type mod 1 ne 0 then spt = spt+'b'
+; if keyword_set(young) and type mod 1 eq 0 then spt = spt+'g'
+print, spt, '  chi^2: ',strn(sigma)
+print, 'p(lot) type: ', strn(ptype)
 
 ;READ IN SPECTRA, MAKE DATA STRUCTURE, or READ FROM SAVE FILE
 if (file_search(strfile) eq '' or keyword_set(reset)) then begin
@@ -235,8 +265,6 @@ if (file_search(strfile) eq '' or keyword_set(reset)) then begin
 		endif ELSE $
 	 	fits_opt = KREADSPEC(spec_fold_opt+sfiles_opt[ifile],hd,/silent,/norm)
 	 
-	 
-	 
 	 if (ifile eq 0) then begin
 		 ;setup the arrays
 	  lam = fits(*,0)
@@ -255,7 +283,9 @@ if (file_search(strfile) eq '' or keyword_set(reset)) then begin
 		flx_opt[*,ifile] = fits_opt
 	 ;print,ifile,flx_opt[0:4,ifile]
 	endfor
-	
+
+	stop
+
 	str = create_struct($
 	'files',sfiles,$
 	'files_opt',sfiles_opt,$
@@ -629,9 +659,11 @@ if keyword_set(ps) then device, /close
 ;===============
 ;plot the K10 way
 ;================
-w = where(str.lam ge 0.9 and str.lam le 2.4,nlam)
-;w_jnorm=where(str.lam ge 1.28-0.02 and str.lam le 1.28+0.02)
-w_jnorm=where(str.lam ge 0.87 and str.lam le 1.39)
+w = where(str.lam ge 0.8 and str.lam le 2.4,nlam)
+
+;norm_region defined up where standards read in
+w_jnorm=where(str.lam ge norm_region[0] and str.lam le norm_region[1])
+;w_jnorm=where(str.lam ge 0.87 and str.lam le 1.39)
 
 flux_mins = fltarr(nspec) & flux_maxs=fltarr(nspec)
 full_flxn=fltarr(n_elements(w),nspec)
@@ -665,7 +697,7 @@ ENDIF
 ;find the minimum and max to setup plot
 yra = [MIN(flux_mins),MAX(flux_maxs) ] 
 
-plot, str.lam(w), str.flx[w,0], /xsty, yra=yra,/ysty, xtitle='!3Wavelength (!9m!3m)', ytitle='Normalized Flux', charsize=2, xmargin=[8,-50], /nodata
+plot, str.lam(w), str.flx[w,0], /xsty, yra=yra,/ysty, xtitle='!3Wavelength (!9m!3m)', ytitle='Normalized Flux', charsize=2, xmargin=[8,5], /nodata,xrange=[0.8,1.4]
 
 case 1 of 
     ptype eq 0: begin
@@ -675,31 +707,44 @@ case 1 of
 			    ;polyfill, [str.lam[w],reverse(str.lam[w])], [template_full+sd,reverse(template_full-sd)], color=colorfill_sdev, /fill
 				oplot, str.lam[w], str.flx(w,i_rejects[j])/norm_facts[i_rejects[j]], color=color_rejected[j], thick=1
 			endfor
-			oplot, std_spec[0,*],std_spec[1,*], thick=1
-			if type ne 0 then oplot, std_spec_m1[0,*],std_spec_m1[1,*], thick=2,linestyle=1
-			if type ne 8 then oplot, std_spec_p1[0,*],std_spec_p1[1,*], thick=2,linestyle=1
+			if ~keyword_set(young) then begin
+				oplot, std_spec[0,*],std_spec[1,*], thick=1
+				oplot, std_spec_m2[0,*],std_spec_m2[1,*], thick=2,linestyle=1
+				oplot, std_spec_m1[0,*],std_spec_m1[1,*], thick=2,linestyle=1
+				oplot, std_spec_p1[0,*],std_spec_p1[1,*], thick=2,linestyle=1
+				oplot, std_spec_p2[0,*],std_spec_p2[1,*], thick=2,linestyle=1
+			endif
 		endif
 	end
     ptype eq 1: begin ;only plot keepers 
 		if (cnt_keep gt 0) then for j=0,cnt_keep-1 do oplot, str.lam[w], str.flx(w,i_keep[j])/norm_facts[i_keep[j]], color=ltgray, thick=1
-		oplot, std_spec[0,*],std_spec[1,*], thick=4
-		if type ne 0 then oplot, std_spec_m1[0,*],std_spec_m1[1,*], thick=3,color = blue
-		if type ne 8 then oplot, std_spec_p1[0,*],std_spec_p1[1,*], thick=3, color=red
-				
+		if ~keyword_set(young) then begin
+			oplot, std_spec[0,*],std_spec[1,*], thick=4
+			oplot, std_spec_m2[0,*],std_spec_m2[1,*], thick=3, color = ltblue
+			oplot, std_spec_m1[0,*],std_spec_m1[1,*], thick=3, color = blue
+			oplot, std_spec_p1[0,*],std_spec_p1[1,*], thick=3, color=red
+			oplot, std_spec_p2[0,*],std_spec_p2[1,*], thick=3, color=orange
+		endif
     end
     else: begin ;plot everything
 		if (cnt_rejects gt 0) then for j=0,cnt_rejects-1 do oplot, str.lam[w], str.flx(w,i_rejects[j])/norm_facts[i_rejects[j]], color=ltgray, thick=1
 		if (cnt_keep gt 0) then for j=0,cnt_keep-1 do oplot, str.lam[w], str.flx(w,i_keep[j])/norm_facts[i_keep[j]], color=gray, thick=1
-		oplot, std_spec[0,*],std_spec[1,*], thick=4
-		if type ne 0 then oplot, std_spec_m1[0,*],std_spec_m1[1,*], thick=3,color = blue
-		if type ne 8 then oplot, std_spec_p1[0,*],std_spec_p1[1,*], thick=3,color = red
+		if ~keyword_set(young) then begin
+			oplot, std_spec[0,*],std_spec[1,*], thick=4
+			if type ne 0 then oplot, std_spec_m1[0,*],std_spec_m1[1,*], thick=3,color = blue
+			if type ne 8 then oplot, std_spec_p1[0,*],std_spec_p1[1,*], thick=3,color = red
+		endif
     end
 endcase
 
-xyouts, 0.7,0.87,spt, charsize=1.5,/normal
-xyouts, 0.7,0.87-0.03,file_basename(std_file_m1), color=blue, /normal
-xyouts, 0.7,0.87-2*0.03,file_basename(std_file), /normal
-xyouts, 0.7,0.87-3*0.03,file_basename(std_file_p1),color=red, /normal
+xloc=0.2
+xyouts, xloc, 0.87,spt, charsize=1.5,/normal
+xyouts, xloc, 0.87-0.03,file_basename(std_file_m2), color=ltblue, /normal
+xyouts, xloc, 0.87-2*0.03,file_basename(std_file_m1), color=blue, /normal
+xyouts, xloc, 0.87-3*0.03,file_basename(std_file), /normal
+xyouts, xloc, 0.87-4*0.03,file_basename(std_file_p1),color=red, /normal
+xyouts, xloc, 0.87-5*0.03,file_basename(std_file_p2),color=orange, /normal
+xyouts, xloc, 0.87-6*0.03,'norm region: ' +strn(norm_region[0],length=4) +'-'+ strn(norm_region[1],length=4), charsize=0.8,/normal
 
 
 if keyword_set(ps) then device, /close
